@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <AssemblyName>Klanker</AssemblyName>
+    <RootNamespace>Klanker</RootNamespace>
+    <Version>0.1.0</Version>
+
+    <KSPBT_ModRoot>$(MSBuildThisFileDirectory)../../build/GameData/Klanker</KSPBT_ModRoot>
+    <KSPBT_ModPluginFolder>Plugins</KSPBT_ModPluginFolder>
+    <KSPBT_CKANCompatibleVersions>1.12</KSPBT_CKANCompatibleVersions>
+    <KSPBT_InstallCKANDependencies>false</KSPBT_InstallCKANDependencies>
+    <KSPBT_GenerateVersionFile>false</KSPBT_GenerateVersionFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KSPBuildTools" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ModReference Include="MechJeb2">
+      <DLLPath>GameData/MechJeb2/Plugins/MechJeb2.dll</DLLPath>
+      <KSPAssemblyName>MechJeb2</KSPAssemblyName>
+      <KSPAssemblyVersion>2.14.3</KSPAssemblyVersion>
+      <CKANIdentifier>MechJeb2</CKANIdentifier>
+      <CKANVersion>2.14.3.0</CKANVersion>
+      <Private>false</Private>
+    </ModReference>
+  </ItemGroup>
+</Project>

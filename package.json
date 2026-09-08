@@ -1,0 +1,16 @@
+{
+  "name": "klanker-build",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.7.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "bootstrap": "node scripts/bootstrap.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "devDependencies": {
+    "fflate": "0.8.2"
+  }
+}

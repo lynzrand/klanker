@@ -1,0 +1,10 @@
+/.cache/
+/.nuget/
+/.vs/
+/build/
+/node_modules/
+**/bin/
+**/obj/
+*.suo
+*.user
+*.userosscache
