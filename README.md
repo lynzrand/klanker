@@ -41,9 +41,6 @@ Keep its subdirectories intact.
    manually; it uses full throttle below 100 km apoapsis and cuts it above that.
    It does not steer, stage, or circularize.
 
-**Stop control releases Klanker's inputs; it does not cut the throttle.**
-The same applies after a worker faults. You remain responsible for the vessel.
-
 ## What has been tested?
 
 The flight UI, script execution, exception reporting, watchdog interruption,
@@ -60,6 +57,7 @@ sandbox for untrusted scripts.
 - [Writing workers](docs/workers.md): the current API, examples, and fault behavior.
 - [Development](docs/development.md): build tasks, deployment, dependencies, and checks.
 - [Design notes](docs/design.md): future plans, not features available today.
+- [Original proposal](docs/proposal.md): the full reference design.
 
 Klanker is licensed under [MPL 2.0](LICENSE). Bundled dependencies carry their
 own notices in `GameData/Klanker/Licenses` in the build output.

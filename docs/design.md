@@ -2,8 +2,8 @@
 
 This is the direction we want to explore, not the API shipped by the PoC.
 The current implementation is documented in [Writing workers](workers.md).
-These notes condense the original design proposal; the full draft remains in
-the repository history.
+These notes condense the [original design proposal](proposal.md), which is
+retained in full for reference.
 
 ## Flight software as workers
 

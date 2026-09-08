@@ -55,9 +55,8 @@ modules is not enabled. Run only scripts you trust.
 **Stop control** detaches the worker. Switching the active vessel also stops it;
 leaving flight disposes it. You must load it again to resume.
 
-Stopping or faulting does **not** set throttle to zero or restore earlier input
-values. It simply stops Klanker from injecting controls, leaving KSP, the player,
-and SAS to continue.
+Stopping or faulting releases Klanker's inputs without changing the throttle
+setting; KSP, the player, and SAS continue to handle control.
 
 ## Examples and fault tests
 
