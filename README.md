@@ -6,6 +6,9 @@ Klanker runs JavaScript inside KSP using V8. Write a `flightTick` handler, read
 your vessel's telemetry, and control its throttle, pitch, yaw, and roll. Edit
 the script and reload it without leaving flight.
 
+Inspired by [ArmorControl](https://github.com/Armo00/ArmorControl),
+by [Armo00](https://github.com/Armo00).
+
 This is an early proof of concept: one worker on the active vessel, loaded from
 an in-game window. There are no computer parts, saved worker state, part APIs,
 remote connections, or MechJeb guidance bindings yet. Try it in a test save.

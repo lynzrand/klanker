@@ -77,8 +77,11 @@ semantics; discrete commands would need identities and deduplication.
 
 Specialist algorithms should stay in specialist mods. MechJeb is the first likely
 integration, through a deliberate adapter rather than automatic exposure of its
-CLR objects. [ArmorControl](https://github.com/Armo00/ArmorControl) was a useful
-reference for flight-control integration; no source was copied from it.
+CLR objects.
+
+[ArmorControl](https://github.com/Armo00/ArmorControl), made by a friend of the
+project's author, inspired Klanker. It also served as a reference for
+flight-control integration; no source was copied from it.
 
 RemoteTech compatibility is another future concern. Loss or delay of ground
 communication should affect deployments, commands, and telemetry, not stop code
