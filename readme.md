@@ -20,6 +20,22 @@ pnpm install
 pnpm build
 ```
 
+[Hereby](https://github.com/jakebailey/hereby) runs the tasks defined in
+`Herebyfile.mjs`: `bootstrap` → `compile` → `build`. The final build task
+assembles the native V8 libraries and license notices into `GameData`.
+
+```sh
+pnpm tasks                            # List available tasks
+pnpm build --configuration Release    # Build a Release package
+pnpm make bootstrap                   # Fetch definitions only
+pnpm make build --configuration Release
+pnpm make                             # Run the default build task
+```
+
+Pass task names before `--configuration`. Multiple requested tasks share their
+dependencies, which Hereby runs once per invocation. Build operations use Node
+APIs and invoke dotnet directly, without shell-specific build scripts.
+
 The first build downloads stripped KSP 1.12.5 reference assemblies from
 [`krpc/ksp-lib`](https://github.com/krpc/ksp-lib). The source revision and
 archive checksum are pinned by `scripts/bootstrap.mjs`. The same bootstrap

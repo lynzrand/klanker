@@ -7,10 +7,13 @@
     "node": ">=22"
   },
   "scripts": {
-    "bootstrap": "node scripts/bootstrap.mjs",
-    "build": "node scripts/build.mjs"
+    "make": "hereby",
+    "bootstrap": "hereby bootstrap",
+    "build": "hereby build",
+    "tasks": "hereby --tasks"
   },
   "devDependencies": {
-    "fflate": "0.8.2"
+    "fflate": "0.8.2",
+    "hereby": "1.15.2"
   }
 }

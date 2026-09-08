@@ -11,12 +11,22 @@ importers:
       fflate:
         specifier: 0.8.2
         version: 0.8.2
+      hereby:
+        specifier: 1.15.2
+        version: 1.15.2
 
 packages:
 
   fflate@0.8.2:
     resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
 
+  hereby@1.15.2:
+    resolution: {integrity: sha512-tZCV42uzoqbXc5kvfs9+6xkZa+pgh2AtCRrF1nXeyOwhw+mBjXYRyXX4tokFpQ7NVF2DB1NbE6ZvtQ9X35wpBA==}
+    engines: {node: '>= 12.20'}
+    hasBin: true
+
 snapshots:
 
   fflate@0.8.2: {}
+
+  hereby@1.15.2: {}

@@ -2,46 +2,41 @@ import { spawn } from 'node:child_process';
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { bootstrap, kspRoot } from './bootstrap.mjs';
+import { kspRoot } from './bootstrap.mjs';
 
-const configurationIndex = process.argv.indexOf('--configuration');
-const configuration = configurationIndex === -1 ? 'Debug' : process.argv[configurationIndex + 1];
+export async function compile(configuration) {
+    if (!configuration || !['Debug', 'Release'].includes(configuration)) {
+        throw new Error('Use --configuration Debug or --configuration Release.');
+    }
 
-if (!configuration || !['Debug', 'Release'].includes(configuration)) {
-    throw new Error('Use --configuration Debug or --configuration Release.');
-}
+    const managedPath = join(kspRoot, 'KSP_Data', 'Managed');
+    const arguments_ = [
+        'build',
+        join(import.meta.dirname, '..', 'Klanker.sln'),
+        '--configuration',
+        configuration,
+        `--property:KSPBT_GameRoot=${kspRoot}`,
+        `--property:KSPBT_ManagedPath=${managedPath}`,
+    ];
 
-await bootstrap();
-
-const managedPath = join(kspRoot, 'KSP_Data', 'Managed');
-const arguments_ = [
-    'build',
-    join(import.meta.dirname, '..', 'Klanker.sln'),
-    '--configuration',
-    configuration,
-    `--property:KSPBT_GameRoot=${kspRoot}`,
-    `--property:KSPBT_ManagedPath=${managedPath}`,
-];
-
-const exitCode = await new Promise((resolvePromise, reject) => {
-    const child = spawn('dotnet', arguments_, { shell: false, stdio: 'inherit' });
-    child.once('error', reject);
-    child.once('exit', (code, signal) => {
-        if (signal) {
-            reject(new Error(`dotnet was terminated by ${signal}.`));
-        } else {
-            resolvePromise(code);
-        }
+    const exitCode = await new Promise((resolvePromise, reject) => {
+        const child = spawn('dotnet', arguments_, { shell: false, stdio: 'inherit' });
+        child.once('error', reject);
+        child.once('exit', (code, signal) => {
+            if (signal) {
+                reject(new Error(`dotnet was terminated by ${signal}.`));
+            } else {
+                resolvePromise(code);
+            }
+        });
     });
-});
 
-if (exitCode !== 0) {
-    process.exitCode = exitCode;
-} else {
-    await copyClearScriptNativeLibraries(configuration);
+    if (exitCode !== 0) {
+        throw new Error(`dotnet build failed with exit code ${exitCode}.`);
+    }
 }
 
-async function copyClearScriptNativeLibraries(buildConfiguration) {
+export async function copyClearScriptNativeLibraries(buildConfiguration) {
     const projectDirectory = join(import.meta.dirname, '..', 'src', 'Klanker');
     const assets = JSON.parse(await readFile(join(projectDirectory, 'obj', 'project.assets.json'), 'utf8'));
     const packageRoot = Object.keys(assets.packageFolders)[0];
