@@ -1,13 +1,23 @@
 import { spawn } from 'node:child_process';
-import { copyFile, mkdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { copyFile, cp, mkdir, readFile, realpath, rm } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 import { kspRoot } from './bootstrap.mjs';
+import { copyMonoRuntime } from './mono-runtime.mjs';
 
 export async function compile(configuration) {
     if (!configuration || !['Debug', 'Release'].includes(configuration)) {
         throw new Error('Use --configuration Debug or --configuration Release.');
     }
+
+    // This is only the generated plugin subtree, never GameData source or a KSP
+    // installation. Recreate it so removed dependencies cannot survive a build.
+    const generated = join(import.meta.dirname, '..', 'build', 'GameData', 'Klanker');
+    try {
+        if (await realpath(generated) !== resolve(generated))
+            throw new Error(`Refusing to clean a linked build directory: ${generated}`);
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    await rm(generated, { recursive: true, force: true });
 
     const managedPath = join(kspRoot, 'KSP_Data', 'Managed');
     const arguments_ = [
@@ -15,6 +25,7 @@ export async function compile(configuration) {
         join(import.meta.dirname, '..', 'Klanker.sln'),
         '--configuration',
         configuration,
+        '--no-incremental',
         `--property:KSPBT_GameRoot=${kspRoot}`,
         `--property:KSPBT_ManagedPath=${managedPath}`,
     ];
@@ -37,10 +48,12 @@ export async function compile(configuration) {
 }
 
 export async function copyClearScriptNativeLibraries(buildConfiguration) {
+    await cp(join(import.meta.dirname, '..', 'GameData'), join(import.meta.dirname, '..', 'build', 'GameData'), { recursive: true });
     const projectDirectory = join(import.meta.dirname, '..', 'src', 'Klanker');
     const assets = JSON.parse(await readFile(join(projectDirectory, 'obj', 'project.assets.json'), 'utf8'));
     const packageRoot = Object.keys(assets.packageFolders)[0];
     const pluginDirectory = join(import.meta.dirname, '..', 'build', 'GameData', 'Klanker', 'Plugins');
+    const nativeDirectory = join(pluginDirectory, 'PluginData');
     const runtimes = [
         ['Microsoft.ClearScript.V8.Native.win-x64', 'win-x64', 'ClearScriptV8.win-x64.dll'],
         ['Microsoft.ClearScript.V8.Native.linux-x64', 'linux-x64', 'ClearScriptV8.linux-x64.so'],
@@ -48,6 +61,10 @@ export async function copyClearScriptNativeLibraries(buildConfiguration) {
     ];
 
     await mkdir(pluginDirectory, { recursive: true });
+    await mkdir(nativeDirectory, { recursive: true });
+    // Remove the old native layout; KSP attempts to scan every visible .dll as IL.
+    // Exact generated filenames only, never anything in the user's installation.
+    for (const [, , fileName] of runtimes) await rm(join(pluginDirectory, fileName), { force: true });
 
     const findPackage = (packageName) => {
         const packageEntry = Object.entries(assets.libraries)
@@ -63,7 +80,7 @@ export async function copyClearScriptNativeLibraries(buildConfiguration) {
     for (const [packageName, runtime, fileName] of runtimes) {
         await copyFile(
             join(findPackage(packageName), 'runtimes', runtime, 'native', fileName),
-            join(pluginDirectory, fileName),
+            join(nativeDirectory, fileName),
         );
     }
 
@@ -81,4 +98,16 @@ export async function copyClearScriptNativeLibraries(buildConfiguration) {
     for (const license of licenses) {
         await copyFile(join(clearScriptPackage, ...license), join(licenseDirectory, license.at(-1)));
     }
+    await copyMonoRuntime(pluginDirectory, licenseDirectory);
+    await checkPackage(buildConfiguration, pluginDirectory);
+}
+
+export async function checkPackage(configuration, pluginDirectory) {
+    const project = join(import.meta.dirname, '..', 'tests', 'Klanker.PackageCheck');
+    const args = ['run', '--project', project, '--configuration', configuration, '--', pluginDirectory, kspRoot];
+    await new Promise((resolve, reject) => {
+        const child = spawn('dotnet', args, { shell: false, stdio: 'inherit', timeout: 120_000 });
+        child.once('error', reject);
+        child.once('exit', (code, signal) => code === 0 ? resolve() : reject(new Error(`Package validation failed (${signal ?? code}).`)));
+    });
 }

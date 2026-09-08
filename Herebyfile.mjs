@@ -2,6 +2,8 @@ import { task } from 'hereby';
 
 import { bootstrap as fetchDefinitions } from './scripts/bootstrap.mjs';
 import { compile as compileAssembly, copyClearScriptNativeLibraries } from './scripts/build.mjs';
+import { smokeTest } from './scripts/test.mjs';
+import { configureLocal, deployFromArguments } from './scripts/deploy.mjs';
 
 const configurationIndex = process.argv.indexOf('--configuration');
 const configuration = configurationIndex === -1 ? 'Debug' : process.argv[configurationIndex + 1];
@@ -31,3 +33,23 @@ export const build = task({
 });
 
 export default build;
+
+export const test = task({
+    name: 'test',
+    description: 'Exercise real V8 and packaged native libraries, with a process timeout.',
+    dependencies: [build],
+    run: () => smokeTest(configuration),
+});
+
+export const deploy = task({
+    name: 'deploy',
+    description: 'Build and install into configured KSP (or --ksp override). Close KSP first.',
+    dependencies: [build],
+    run: deployFromArguments,
+});
+
+export const configure = task({
+    name: 'configure',
+    description: 'Save a validated local installation path: --ksp path/to/KSP.',
+    run: () => configureLocal(),
+});

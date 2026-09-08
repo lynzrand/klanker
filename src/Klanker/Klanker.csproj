@@ -10,6 +10,9 @@
     <KSPBT_CKANCompatibleVersions>1.12</KSPBT_CKANCompatibleVersions>
     <KSPBT_InstallCKANDependencies>false</KSPBT_InstallCKANDependencies>
     <KSPBT_GenerateVersionFile>false</KSPBT_GenerateVersionFile>
+    <!-- KSPBuildTools appends dependency attributes after the SDK's incremental
+         assembly-info hash. Declare ours early so metadata edits rebuild it. -->
+    <KSPBT_GenerateDependencyAttributes>false</KSPBT_GenerateDependencyAttributes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,10 +46,20 @@
   </ItemGroup>
 
   <ItemGroup>
+    <AssemblyAttribute Include="KSPAssemblyDependency">
+      <_Parameter1>MechJeb2</_Parameter1>
+      <_Parameter2>2</_Parameter2>
+      <_Parameter2_TypeName>System.Int32</_Parameter2_TypeName>
+      <_Parameter3>5</_Parameter3>
+      <_Parameter3_TypeName>System.Int32</_Parameter3_TypeName>
+      <_Parameter4>0</_Parameter4>
+      <_Parameter4_TypeName>System.Int32</_Parameter4_TypeName>
+    </AssemblyAttribute>
     <ModReference Include="MechJeb2">
       <DLLPath>GameData/MechJeb2/Plugins/MechJeb2.dll</DLLPath>
       <KSPAssemblyName>MechJeb2</KSPAssemblyName>
-      <KSPAssemblyVersion>2.14.3</KSPAssemblyVersion>
+      <!-- KSPAssembly is an API identity, not the release/CKAN version. -->
+      <KSPAssemblyVersion>2.5.0</KSPAssemblyVersion>
       <CKANIdentifier>MechJeb2</CKANIdentifier>
       <CKANVersion>2.14.3.0</CKANVersion>
       <Private>false</Private>

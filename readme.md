@@ -5,7 +5,8 @@ to manage your spacecrafts like serverless workers.
 
 The design proposal lives in
 [`docs/Klanker Proposal v2.md`](docs/Klanker%20Proposal%20v2.md), but its
-runtime and gameplay behavior are intentionally not implemented yet.
+first proof of concept implements V8 and synchronous flight control. See
+[the PoC guide](docs/poc.md) for installation, worker examples, and limitations.
 
 ## Build
 
@@ -22,7 +23,8 @@ pnpm build
 
 [Hereby](https://github.com/jakebailey/hereby) runs the tasks defined in
 `Herebyfile.mjs`: `bootstrap` → `compile` → `build`. The final build task
-assembles the native V8 libraries and license notices into `GameData`.
+assembles native V8, missing Mono framework libraries, and license notices into
+`GameData`, then validates the package's assembly references against KSP.
 
 ```sh
 pnpm tasks                            # List available tasks
@@ -30,6 +32,9 @@ pnpm build --configuration Release    # Build a Release package
 pnpm make bootstrap                   # Fetch definitions only
 pnpm make build --configuration Release
 pnpm make                             # Run the default build task
+pnpm make test --configuration Release # Build and exercise real V8
+pnpm make configure --ksp "path/to/KSP" # Saves git-ignored klanker.local.json
+pnpm make deploy --configuration Release
 ```
 
 Pass task names before `--configuration`. Multiple requested tasks share their
@@ -47,6 +52,12 @@ packages for KSP's Windows x64, Linux x64, and macOS x64 targets. Windows-only
 JScript/VBScript support and native targets that KSP does not ship for are not
 included. The generated `GameData` tree also carries the upstream ClearScript
 and V8 license notices.
+
+KSP's stripped Mono distribution omits some framework libraries that ClearScript
+and its dependencies require. The build fetches pinned, executable Mono libraries
+online and packages only the missing ones; Microsoft's reference assemblies stay
+compile-only. See [runtime packaging](docs/runtime-packaging.md) for provenance,
+native-library placement, and validation limits.
 
 Downloaded dependencies are cached under `.cache/`; the build never reads a
 local KSP installation. The resulting KSP `GameData` layout is written to

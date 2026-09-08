@@ -3,6 +3,7 @@
 /.vs/
 /build/
 /node_modules/
+/klanker.local.json
 **/bin/
 **/obj/
 *.suo
