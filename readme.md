@@ -26,6 +26,12 @@ archive checksum are pinned by `scripts/bootstrap.mjs`. The same bootstrap
 downloads the exact MechJeb `2.14.3.0` release and references `MechJeb2.dll`
 for compilation. Newer MechJeb versions are deliberately not used.
 
+ClearScript `7.5.1.1` is pinned as separate V8, ICU data, and native runtime
+packages for KSP's Windows x64, Linux x64, and macOS x64 targets. Windows-only
+JScript/VBScript support and native targets that KSP does not ship for are not
+included. The generated `GameData` tree also carries the upstream ClearScript
+and V8 license notices.
+
 Downloaded dependencies are cached under `.cache/`; the build never reads a
 local KSP installation. The resulting KSP `GameData` layout is written to
 `build/GameData`.
