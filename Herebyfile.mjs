@@ -4,9 +4,18 @@ import { bootstrap as fetchDefinitions } from './scripts/bootstrap.mjs';
 import { compile as compileAssembly, copyClearScriptNativeLibraries } from './scripts/build.mjs';
 import { smokeTest } from './scripts/test.mjs';
 import { configureLocal, deployFromArguments } from './scripts/deploy.mjs';
+import { snapshotSource, packageRelease } from './scripts/package.mjs';
 
+const packaging = process.argv.includes('package');
 const configurationIndex = process.argv.indexOf('--configuration');
-const configuration = configurationIndex === -1 ? 'Debug' : process.argv[configurationIndex + 1];
+const configuration = configurationIndex === -1 ? (packaging ? 'Release' : 'Debug') : process.argv[configurationIndex + 1];
+if (packaging && configuration !== 'Release') throw new Error('Packaging requires --configuration Release.');
+let sourceSnapshot;
+const packageInputs = task({
+    name: 'package-inputs',
+    description: 'Capture source inputs before the release build.',
+    run: async () => { sourceSnapshot = await snapshotSource(); },
+});
 
 if (!['Debug', 'Release'].includes(configuration)) {
     throw new Error('Use --configuration Debug or --configuration Release.');
@@ -21,7 +30,7 @@ export const bootstrap = task({
 export const compile = task({
     name: 'compile',
     description: 'Compile the net472 plugin.',
-    dependencies: [bootstrap],
+    dependencies: packaging ? [bootstrap, packageInputs] : [bootstrap],
     run: () => compileAssembly(configuration),
 });
 
@@ -52,4 +61,11 @@ export const configure = task({
     name: 'configure',
     description: 'Save a validated local installation path: --ksp path/to/KSP.',
     run: () => configureLocal(),
+});
+
+export const packageTask = task({
+    name: 'package',
+    description: 'Build/test Release and create a verified tester ZIP with source and checksums.',
+    dependencies: [test],
+    run: () => packageRelease(sourceSnapshot),
 });

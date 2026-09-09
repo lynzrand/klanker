@@ -74,6 +74,24 @@ Managed DLLs go in `Plugins`. Native V8 libraries go in `Plugins/PluginData`,
 which the addon supplies to ClearScript as an auxiliary search path. Keep this
 layout: KSP otherwise tries to load the Windows native DLL as a managed assembly.
 
+## Making a tester package
+
+Run `pnpm make package`. This always builds and tests Release, then creates
+`build/releases/Klanker-<version>-<base-commit>-<source-fingerprint>.zip` and
+a matching `.zip.sha256` file. Explicit Debug packaging is rejected.
+
+The ZIP contains the installable GameData folder, setup instructions, docs,
+licenses/notices, a file-hash manifest, and `Klanker-source.zip`. KSP,
+ModuleManager, and MechJeb are not bundled; testers install those separately.
+
+The source archive contains the actual working-tree build inputs, including
+uncommitted changes, rather than silently archiving an older commit. The
+manifest records whether the tree was dirty, its base commit, and its source
+fingerprint. Local installation config, caches, and generated files are excluded.
+If source inputs change during the build/tests, packaging stops; rerun it.
+An existing identically named output is only reused if its bytes match.
+This task creates local artifacts; it does not commit, push, or publish a release.
+
 ## Checks and their limits
 
 Every build checks packaged assembly-reference names against the downloaded KSP
