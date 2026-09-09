@@ -7,6 +7,7 @@ internal static class StorageTests
 {
     internal static void Run()
     {
+        using var runtimeHost = new WorkerRuntime();
         const string source = """
             export default { flightTick(ctx) {
                 if (Object.getPrototypeOf(ctx.storage) !== Object.prototype) throw new Error('not a JS object');
@@ -20,7 +21,7 @@ internal static class StorageTests
         var vessel = new Vessel();
         var controls = new FlightCtrlState();
         var program = new ComputerProgram();
-        using (var computer = new ComputerWorker(program))
+        using (var computer = new ComputerWorker(program, runtimeHost))
         {
             computer.Assign("storage.js", source);
             computer.Start(); computer.SetAuthority(true);
@@ -38,7 +39,7 @@ internal static class StorageTests
             computer.SetAuthority(true); computer.Tick(vessel, controls);
             computer.Assign("storage.js", source); computer.Tick(vessel, controls); computer.Stop();
             Check(program.StorageJson.Contains("\"count\":4"), "storage survives restart and script replacement");
-            using var restoredComputer = new ComputerWorker(restored);
+            using var restoredComputer = new ComputerWorker(restored, runtimeHost);
             restoredComputer.Start(); restoredComputer.SetAuthority(true);
             restoredComputer.Tick(vessel, controls); restoredComputer.CheckpointStorage();
             Check(restored.StorageJson.Contains("\"count\":2"), "quicksave snapshot restores independently of later edits");
@@ -57,13 +58,13 @@ internal static class StorageTests
         {
             var data = new ComputerProgram();
             data.SetStorage("{\"good\":7}");
-            using var computer = new ComputerWorker(data);
+            using var computer = new ComputerWorker(data, runtimeHost);
             computer.Assign("bad.js", "export default { flightTick({storage, vessel}) { " + mutation + "; } };");
             computer.Start(); computer.SetAuthority(true); computer.Tick(vessel, controls);
             computer.CheckpointStorage();
             Check(data.StorageJson == "{\"good\":7}" && computer.StorageError.Length > 0, "invalid storage retains checkpoint: " + mutation);
         }
-        using (var computer = new ComputerWorker(new ComputerProgram()))
+        using (var computer = new ComputerWorker(new ComputerProgram(), runtimeHost))
         {
             computer.Assign("fault.js", "export default { flightTick({storage}) { storage.bad = 1; throw new Error('fault'); } };");
             computer.Start(); computer.SetAuthority(true);
@@ -72,6 +73,8 @@ internal static class StorageTests
         }
 
         HighLogic.LoadedSceneIsFlight = true;
+        var addon = new FlightAddon();
+        addon.Awake();
         var pod = new KlankerComputer();
         var copy = new KlankerComputer();
         var loaded = new KlankerComputer();
@@ -88,7 +91,7 @@ internal static class StorageTests
             Check(copy.Computer.Program.StorageJson.Contains("\"count\":2") &&
                 pod.Computer.Program.StorageJson.Contains("\"count\":1"), "copied parts have independent storage");
         }
-        finally { pod.OnDestroy(); copy.OnDestroy(); loaded.OnDestroy(); HighLogic.LoadedSceneIsFlight = false; }
+        finally { pod.OnDestroy(); copy.OnDestroy(); loaded.OnDestroy(); addon.OnDestroy(); HighLogic.LoadedSceneIsFlight = false; }
     }
     private static void Check(bool condition, string label)
     {

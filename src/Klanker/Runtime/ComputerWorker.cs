@@ -8,16 +8,21 @@ internal sealed class ComputerWorker : IDisposable
 {
     private FlightWorker? runtime;
     private bool authority;
+    private readonly WorkerRuntime? injectedRuntime;
     internal ComputerProgram Program { get; }
     internal long SuccessfulTicks { get; private set; }
-    internal bool IsRunning => runtime != null;
+    internal bool IsRunning => runtime != null && !runtime.IsDisposed;
     internal string StorageError { get; private set; } = "";
     internal string Status => Program.Fault.Length != 0 ? "FAULTED: " + Program.Fault :
         !Program.HasScript ? "No script assigned." :
         !Program.RunRequested ? "Stopped." :
         IsRunning ? "Running." : "Standby: waiting to be the active control point.";
 
-    internal ComputerWorker(ComputerProgram program) => Program = program;
+    internal ComputerWorker(ComputerProgram program, WorkerRuntime? runtimeHost = null)
+    {
+        Program = program;
+        injectedRuntime = runtimeHost;
+    }
 
     internal void Assign(string fileName, string source)
     {
@@ -65,18 +70,19 @@ internal sealed class ComputerWorker : IDisposable
 
     private void Resume()
     {
+        if (runtime?.IsDisposed == true) runtime = null;
         if (!authority || runtime != null || !Program.RunRequested || !Program.HasScript || Program.Fault.Length != 0) return;
         try { runtime = CreateRuntime(Program.Source, Program.FileName); }
         catch (Exception exception) { RecordFault(exception); }
     }
 
     private FlightWorker CreateRuntime(string source, string fileName) =>
-        new(source, message => UnityEngine.Debug.Log(
+        (injectedRuntime ?? FlightAddon.RuntimeHost).CreateWorker(source, message => UnityEngine.Debug.Log(
             $"[Klanker worker {Program.WorkerId} {fileName}] {message}"), Program.StorageJson);
 
     internal void CheckpointStorage()
     {
-        if (runtime == null) return;
+        if (runtime == null || runtime.IsDisposed) return;
         try
         {
             Program.SetStorage(runtime.SnapshotStorage());

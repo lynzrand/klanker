@@ -22,18 +22,24 @@ internal sealed class FlightWorker : IDisposable
     private bool firstTick = true;
     private readonly object interruptGate = new();
     private long invocation;
+    private readonly Action<FlightWorker>? onDisposed;
+    internal bool IsDisposed { get; private set; }
 
-    internal FlightWorker(string source, Action<string>? log = null, string storageJson = "{}")
+    // Standalone mode remains for isolated smoke tests and the startup benchmark.
+    // Production workers are created through the addon-owned WorkerRuntime.
+    internal FlightWorker(string source, Action<string>? log = null, string storageJson = "{}",
+        V8Runtime? sharedRuntime = null, Action<FlightWorker>? onDisposed = null)
     {
         this.log = log;
-        engine = new V8ScriptEngine();
+        this.onDisposed = onDisposed;
+        engine = sharedRuntime == null ? new V8ScriptEngine() : sharedRuntime.CreateScriptEngine();
         try
         {
             engine.DefaultAccess = ScriptAccess.None;
             engine.AllowReflection = false;
             engine.ExposeHostObjectStaticMembers = false;
             engine.DisableExtensionMethods = true;
-            engine.MaxRuntimeHeapSize = (UIntPtr)(64UL * 1024 * 1024);
+            if (sharedRuntime == null) engine.MaxRuntimeHeapSize = (UIntPtr)(64UL * 1024 * 1024);
             engine.AddHostObject("__context", context);
             engine.AddHostObject("__log", new Action<string, bool>(Log));
             engine.AddHostObject("__loadStorage", new Func<string>(() => storageJson));
@@ -235,5 +241,13 @@ internal sealed class FlightWorker : IDisposable
         }
     }
 
-    public void Dispose() => engine.Dispose();
+    public void Dispose()
+    {
+        if (IsDisposed) return;
+        IsDisposed = true;
+        EndInvocation();
+        context.End();
+        try { engine.Dispose(); }
+        finally { onDisposed?.Invoke(this); }
+    }
 }

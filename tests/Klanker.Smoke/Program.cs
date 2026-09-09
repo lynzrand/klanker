@@ -9,8 +9,14 @@ internal static class Program
     {
         try
         {
-            if (args.Length != 1) throw new ArgumentException("Pass the packaged Plugins directory.");
+            if (args.Length < 1 || args.Length > 2) throw new ArgumentException("Pass the packaged Plugins directory and optional --benchmark.");
             HostSettings.AuxiliarySearchPath = System.IO.Path.Combine(System.IO.Path.GetFullPath(args[0]), "PluginData");
+            if (args.Length == 2)
+            {
+                if (args[1] != "--benchmark") throw new ArgumentException("Unknown option: " + args[1]);
+                RuntimeTests.Benchmark();
+                return 0;
+            }
             var vessel = new Vessel { altitude = 10 };
             var controls = new FlightCtrlState();
             using (var worker = new FlightWorker("""
@@ -55,6 +61,7 @@ internal static class Program
             ViewTests.Run();
             ComputerTests.Run(args[0]);
             StorageTests.Run();
+            RuntimeTests.Run();
 
             Console.WriteLine("PASS: native V8, live reads, overlay, rollback, ranges, sync-only, watchdog, validation, recreation.");
             return 0;

@@ -36,6 +36,13 @@ along with all pending controls. There is no string-key property dispatcher.
 Only annotated view members are exposed, with reflection and extension methods
 disabled. The script-facing contract lives in `GameData/Klanker/Workers/klanker.d.ts`.
 
+The scene addon owns and warms one ClearScript `V8Runtime`. Worker creation uses
+fresh engine contexts within that runtime, avoiding a new isolate for every
+assignment, validation, or restart. Globals and JS storage objects are separate;
+the runtime heap and execution scheduling are shared. The addon checkpoints and
+releases its active worker before disposing the remaining contexts and runtime
+at scene teardown. Nothing persists across scenes except part-owned save data.
+
 Future part actions, such as staging or activating an engine, should use the same
 buffering model. Their validation and commit behavior still need careful design:
 an action that has already changed KSP cannot simply be undone like a number in

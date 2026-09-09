@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Diagnostics.CodeAnalysis;
 using Klanker.Runtime;
 using Microsoft.ClearScript;
 using UnityEngine;
@@ -9,6 +10,8 @@ namespace Klanker;
 
 // Owns the scene UI and the single vessel callback, not the script assignment.
 [KSPAddon(KSPAddon.Startup.FlightAndEditor, false)]
+[SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "Unity owns the addon lifetime; OnDestroy disposes the scene runtime.")]
 public sealed class FlightAddon : MonoBehaviour
 {
     private static FlightAddon? instance;
@@ -20,6 +23,10 @@ public sealed class FlightAddon : MonoBehaviour
     private string scriptName = "observe.js";
     private string message = "";
     private bool visible;
+    private WorkerRuntime? runtimeHost;
+    private string runtimeError = "";
+    internal static WorkerRuntime RuntimeHost => instance?.runtimeHost ??
+        throw new InvalidOperationException("Klanker V8 runtime is not available in this scene.");
 
     public void Awake()
     {
@@ -27,6 +34,17 @@ public sealed class FlightAddon : MonoBehaviour
         visible = HighLogic.LoadedSceneIsFlight;
         HostSettings.AuxiliarySearchPath = Path.Combine(
             KSPUtil.ApplicationRootPath, "GameData", "Klanker", "Plugins", "PluginData");
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            runtimeHost = new WorkerRuntime();
+            Debug.Log($"[Klanker] Scene V8 runtime warmed in {watch.Elapsed.TotalMilliseconds:F1} ms.");
+        }
+        catch (Exception exception)
+        {
+            runtimeError = "V8 startup failed: " + exception.Message;
+            Debug.LogError("[Klanker] " + exception);
+        }
         Debug.Log("[Klanker] Computer UI ready. F8 toggles it; part menus select a computer.");
     }
 
@@ -84,6 +102,7 @@ public sealed class FlightAddon : MonoBehaviour
 
     private void DrawWindow(int id)
     {
+        if (runtimeError.Length != 0) GUILayout.Label(runtimeError);
         if (selected == null)
         {
             GUILayout.Label("Right-click a command pod or probe core and choose Klanker worker…");
@@ -174,6 +193,8 @@ public sealed class FlightAddon : MonoBehaviour
     public void OnDestroy()
     {
         ReleaseAuthority();
+        runtimeHost?.Dispose();
+        runtimeHost = null;
         if (instance == this) instance = null;
     }
 }

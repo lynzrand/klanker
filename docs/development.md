@@ -74,6 +74,31 @@ Managed DLLs go in `Plugins`. Native V8 libraries go in `Plugins/PluginData`,
 which the addon supplies to ClearScript as an auxiliary search path. Keep this
 layout: KSP otherwise tries to load the Windows native DLL as a managed assembly.
 
+## V8 startup benchmark
+
+After a Release build/test, run:
+
+~~~sh
+dotnet tests/Klanker.Smoke/bin/Release/net9.0/Klanker.Smoke.dll build/GameData/Klanker/Plugins --benchmark
+~~~
+
+On Windows, the corresponding `net472/Klanker.Smoke.exe` accepts the same
+arguments. This reports cold standalone startup, scene-host warmup, and
+12-sample warm medians for creation plus first tick with standalone versus
+shared runtimes. The comparison exercises real V8 but uses small KSP fixtures,
+not Unity Mono. Warmup is measured after the standalone trials, so that number
+does not represent a cold scene startup.
+
+On this Windows machine, the 2026-09-09 run measured approximately 1.9 ms
+standalone versus 1.0 ms shared warm medians on both desktop .NET targets.
+The first cold standalone sample was about 86 ms on .NET 9 and 165 ms on
+.NET Framework. These are diagnostic samples, not guaranteed KSP timings.
+KSP logs its actual scene initialization as `Scene V8 runtime warmed in ... ms`.
+
+Runtime tests cover separate globals/modules/storage, failed initialization,
+watchdog recovery across contexts, and ownership/disposal. The shared runtime
+is scene-scoped, not a background-thread execution service.
+
 ## Making a tester package
 
 Run `pnpm make package`. This always builds and tests Release, then creates

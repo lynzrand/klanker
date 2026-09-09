@@ -8,6 +8,7 @@ internal static class ComputerTests
 {
     internal static void Run(string plugins)
     {
+        using var runtimeHost = new WorkerRuntime();
         const string source = "// braces {} = // and unicode: 航天器\nexport default { flightTick({vessel}) { vessel.control.throttle = 0.25; } };";
         var program = new ComputerProgram();
         program.Assign("test.js", source);
@@ -29,7 +30,7 @@ internal static class ComputerTests
         broken["klankerVersion"] = "999";
         Reject(() => ComputerProgram.Load(key => broken.TryGetValue(key, out var value) ? value : null), "unknown schema");
 
-        using (var worker = new ComputerWorker(restored))
+        using (var worker = new ComputerWorker(restored, runtimeHost))
         {
             Check(!worker.IsRunning, "restoring metadata does not create a runtime");
             worker.SetAuthority(true);
@@ -52,7 +53,7 @@ internal static class ComputerTests
             worker.SetAuthority(true);
             Check(!worker.IsRunning && worker.Program.Fault.Contains("sticky"), "fault survives authority changes");
             var faultSave = Save(worker.Program, true);
-            using var loadedFault = new ComputerWorker(ComputerProgram.Load(key => faultSave.TryGetValue(key, out var value) ? value : null));
+            using var loadedFault = new ComputerWorker(ComputerProgram.Load(key => faultSave.TryGetValue(key, out var value) ? value : null), runtimeHost);
             loadedFault.SetAuthority(true);
             Check(!loadedFault.IsRunning && loadedFault.Program.Fault.Contains("sticky"), "fault survives save/load without automatic retry");
             worker.Assign("test.js", source);
@@ -65,16 +66,17 @@ internal static class ComputerTests
 
         KSPUtil.ApplicationRootPath = Path.GetFullPath(Path.Combine(plugins, "..", "..", ".."));
         HighLogic.LoadedSceneIsFlight = true;
+        var addon = new FlightAddon();
+        addon.Awake();
         var vessel = new Vessel();
         var a = Pod(vessel, source);
         var b = Pod(vessel, "export default { flightTick({vessel}) { vessel.control.throttle = 0.75; } };");
-        var addon = new FlightAddon();
         try
         {
             FlightGlobals.ActiveVessel = vessel;
             vessel.ReferencePart = a.part;
             a.Computer.Start(); b.Computer.Start();
-            addon.Awake(); addon.Update();
+            addon.Update();
             var controls = new FlightCtrlState();
             vessel.Tick(controls);
             Check(controls.mainThrottle == 0.25f && vessel.SubscriberCount == 1, "one callback for the active pod");
@@ -97,6 +99,8 @@ internal static class ComputerTests
             Check(controls.mainThrottle == 0.1f, "moved part cannot control its previous vessel");
             FlightGlobals.ActiveVessel = split; addon.Update(); split.Tick(controls);
             Check(controls.mainThrottle == 0.75f && vessel.SubscriberCount == 0 && split.SubscriberCount == 1, "same computer rebinds to new vessel");
+            var sceneRuntime = FlightAddon.RuntimeHost;
+            Check(sceneRuntime.ContextCount == 1, "scene runtime owns the active worker context");
             var node = new ConfigNode(); b.OnSave(node);
             var loaded = new KlankerComputer(); loaded.OnLoad(node); loaded.OnStart(PartModule.StartState.Flying);
             Check(loaded.Computer.Program.Source == b.Computer.Program.Source && loaded.Computer.Program.WorkerId == b.Computer.Program.WorkerId, "PartModule save/load wiring");
@@ -125,6 +129,8 @@ internal static class ComputerTests
             Check(resaved.GetValue("scriptBase64") != "!", "explicit replacement clears unreadable save");
             loaded.OnDestroy(); copy.OnDestroy();
             addon.OnDestroy();
+            Check(sceneRuntime.ContextCount == 0, "addon teardown releases its shared runtime contexts");
+            Reject(() => sceneRuntime.CreateWorker(source), "addon runtime cannot be reused after scene teardown");
             Check(split.SubscriberCount == 0 && !b.Computer.IsRunning, "scene teardown unsubscribes and disposes runtime");
             Check(b.Computer.Program.RunRequested, "scene teardown retains requested run state");
         }

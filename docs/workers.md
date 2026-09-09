@@ -178,7 +178,10 @@ script** to retry, or assign a replacement.
 After testing the watchdog, assign `observe.js` to check that a fresh worker runs.
 
 The time budget is 20 ms per tick, with 250 ms for the first tick's startup work
-and 2 seconds for module initialization. V8 has a 64 MiB heap limit. These limits
+and 2 seconds for module initialization. The addon owns one V8 runtime per
+editor/flight scene, warmed during scene startup. Each worker still gets a fresh
+context with separate globals and its own restored storage. Contexts share a
+64 MiB runtime heap limit (not 64 MiB each) and execute serially. These limits
 are safeguards, not hard real-time guarantees; startup can cause a brief hitch.
 
 The exception and watchdog displays were verified in Windows KSP on 2026-09-08.
