@@ -1,5 +1,10 @@
 /** Klanker worker API. Live vessel access is only valid during flightTick. */
 declare namespace Klanker {
+    type JsonValue = null | boolean | number | string | JsonValue[] | Storage;
+    /** Mutable JSON object. Values must be finite/JSON-compatible at checkpoint time. */
+    interface Storage {
+        [key: string]: JsonValue;
+    }
     interface Worker {
         /** Synchronous: promises/async handlers are rejected. */
         flightTick(context: FlightContext): void;
@@ -7,6 +12,8 @@ declare namespace Klanker {
 
     interface FlightContext {
         readonly vessel: VesselView;
+        /** Per-part state: root cannot be replaced, but its properties can be edited/deleted. */
+        readonly storage: Storage;
         /** KSP universal time, simulation seconds. Only readable inside flightTick. */
         readonly universalTime: number;
         /** Current physics timestep in simulation seconds, not wall time. */

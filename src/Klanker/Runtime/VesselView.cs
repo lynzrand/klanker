@@ -33,6 +33,9 @@ public sealed class FlightContext
     internal void Commit() => Vessel.Control.Apply();
     internal void End() { Vessel.Control.Clear(); binding.Clear(); }
     [ScriptMember("vessel")] public VesselView Vessel { get; }
+    private ScriptObject storage = null!;
+    internal void BindStorage(ScriptObject value) => storage = value;
+    [ScriptMember("storage")] public ScriptObject Storage => storage;
     [ScriptMember("universalTime")] public double UniversalTime { get { _ = binding.Vessel; return Planetarium.GetUniversalTime(); } }
     [ScriptMember("deltaTime")] public double DeltaTime { get { _ = binding.Vessel; return TimeWarp.fixedDeltaTime; } }
 }

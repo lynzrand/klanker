@@ -100,5 +100,7 @@ unloaded-vessel simulation are all outside this PoC.
 
 Command parts now have worker identities, saved script assignments, and an
 opt-in run setting. This is the first part-backed slice, not the complete actor
-model above. Durable structured worker state, aliases, deployment revisions,
-and dedicated development tooling remain to be designed and implemented.
+model above. A simple per-part JSON store is now exposed as `ctx.storage` and
+checkpointed on KSP save and normal runtime teardown. Aliases, deployment
+revisions, state migrations, and dedicated development tooling remain to be
+designed and implemented.

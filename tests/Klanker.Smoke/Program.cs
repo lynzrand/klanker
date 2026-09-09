@@ -54,6 +54,7 @@ internal static class Program
             ViewTests.CheckDeclarations(args[0]);
             ViewTests.Run();
             ComputerTests.Run(args[0]);
+            StorageTests.Run();
 
             Console.WriteLine("PASS: native V8, live reads, overlay, rollback, ranges, sync-only, watchdog, validation, recreation.");
             return 0;

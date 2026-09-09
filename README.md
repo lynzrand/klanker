@@ -11,8 +11,9 @@ by [Armo00](https://github.com/Armo00).
 
 Workers now belong to command pods and probe cores. Each part keeps its own
 script assignment; the current control point runs its worker while the others
-wait on standby. Scripts are stored with the craft/save, but JavaScript variables
-are not persistent. Part APIs, remote connections, and MechJeb guidance bindings
+wait on standby. Scripts and explicit `ctx.storage` JSON data are stored with
+the craft/save; ordinary JavaScript variables still reset with the runtime.
+Part APIs, remote connections, and MechJeb guidance bindings
 are still future work. Try this early build in a test save.
 
 ## Try it

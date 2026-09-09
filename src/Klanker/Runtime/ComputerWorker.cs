@@ -11,6 +11,7 @@ internal sealed class ComputerWorker : IDisposable
     internal ComputerProgram Program { get; }
     internal long SuccessfulTicks { get; private set; }
     internal bool IsRunning => runtime != null;
+    internal string StorageError { get; private set; } = "";
     internal string Status => Program.Fault.Length != 0 ? "FAULTED: " + Program.Fault :
         !Program.HasScript ? "No script assigned." :
         !Program.RunRequested ? "Stopped." :
@@ -21,13 +22,14 @@ internal sealed class ComputerWorker : IDisposable
     internal void Assign(string fileName, string source)
     {
         ComputerProgram.Validate(fileName, source);
+        CheckpointStorage();
         // Validate first: a bad replacement must not change the saved deployment
         // or disturb the old engine. This also bounds top-level module execution.
         var candidate = CreateRuntime(source, fileName);
         try
         {
             Program.Assign(fileName, source);
-            ReleaseRuntime();
+            ReleaseRuntime(false);
             SuccessfulTicks = 0;
             if (authority && Program.RunRequested)
             {
@@ -70,7 +72,24 @@ internal sealed class ComputerWorker : IDisposable
 
     private FlightWorker CreateRuntime(string source, string fileName) =>
         new(source, message => UnityEngine.Debug.Log(
-            $"[Klanker worker {Program.WorkerId} {fileName}] {message}"));
+            $"[Klanker worker {Program.WorkerId} {fileName}] {message}"), Program.StorageJson);
+
+    internal void CheckpointStorage()
+    {
+        if (runtime == null) return;
+        try
+        {
+            Program.SetStorage(runtime.SnapshotStorage());
+            StorageError = "";
+        }
+        catch (Exception exception)
+        {
+            // A bad storage value must not abort a KSP save or replace the last good JSON.
+            StorageError = "Storage not saved; kept last valid snapshot: " + exception.Message;
+            if (StorageError.Length > 2048) StorageError = StorageError.Substring(0, 2048);
+            UnityEngine.Debug.LogError("[Klanker] " + StorageError);
+        }
+    }
 
     internal void Tick(Vessel vessel, FlightCtrlState controls)
     {
@@ -92,11 +111,12 @@ internal sealed class ComputerWorker : IDisposable
         // Keep saved diagnostics bounded even if a worker throws a huge JS string.
         Program.Fault = exception.Message.Length > 2048 ? exception.Message.Substring(0, 2048) : exception.Message;
         if (Program.Fault.Length == 0) Program.Fault = exception.GetType().Name;
-        ReleaseRuntime();
+        ReleaseRuntime(false);
     }
 
-    private void ReleaseRuntime()
+    private void ReleaseRuntime(bool checkpoint = true)
     {
+        if (checkpoint) CheckpointStorage();
         var previous = runtime;
         runtime = null;
         previous?.Dispose();

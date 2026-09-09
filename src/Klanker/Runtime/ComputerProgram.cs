@@ -8,6 +8,7 @@ namespace Klanker.Runtime;
 internal sealed class ComputerProgram
 {
     internal const int MaximumBytes = 128 * 1024;
+    internal const int MaximumStorageBytes = 64 * 1024;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private static readonly char[] PathSeparators = { '/', '\\', ':' };
     internal string WorkerId { get; private set; } = "";
@@ -16,6 +17,14 @@ internal sealed class ComputerProgram
     internal bool RunRequested { get; set; }
     internal string Fault { get; set; } = "";
     internal bool HasScript => FileName.Length != 0;
+    internal string StorageJson { get; private set; } = "{}";
+
+    internal void SetStorage(string json)
+    {
+        if (Utf8.GetByteCount(json) > MaximumStorageBytes)
+            throw new FormatException("Worker storage exceeds 64 KiB of UTF-8 JSON.");
+        StorageJson = json;
+    }
 
     internal void EnsureIdentity()
     {
@@ -42,7 +51,7 @@ internal sealed class ComputerProgram
 
     internal ComputerProgram CopyForNewPart() => new()
     {
-        FileName = FileName, Source = Source, RunRequested = RunRequested,
+        FileName = FileName, Source = Source, RunRequested = RunRequested, StorageJson = StorageJson,
         // A copied computer gets a new identity and does not inherit a runtime fault.
     };
 
@@ -55,6 +64,7 @@ internal sealed class ComputerProgram
         set("scriptBase64", Convert.ToBase64String(Utf8.GetBytes(Source)));
         set("runRequested", RunRequested ? "True" : "False");
         set("faultBase64", flight ? Convert.ToBase64String(Encoding.UTF8.GetBytes(Fault)) : "");
+        set("storageBase64", Convert.ToBase64String(Utf8.GetBytes(StorageJson)));
     }
 
     internal static ComputerProgram Load(Func<string, string?> get)
@@ -75,6 +85,8 @@ internal sealed class ComputerProgram
             throw new FormatException("Invalid saved run setting.");
         result.RunRequested = run;
         result.Fault = Decode(get("faultBase64"), 16 * 1024);
+        var storage = Decode(get("storageBase64"), MaximumStorageBytes);
+        result.SetStorage(storage.Length == 0 ? "{}" : storage);
         return result;
     }
 

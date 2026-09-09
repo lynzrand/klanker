@@ -66,6 +66,50 @@ than being clamped. `async` handlers and returned promises are rejected. Vessel
 access is only valid during `flightTick`; raw KSP objects and general CLR access
 are not exposed.
 
+## Persistent storage
+
+Each command part has its own mutable `ctx.storage` object:
+
+~~~js
+export default {
+    flightTick({ storage, vessel }) {
+        storage.highestAltitude = Math.max(storage.highestAltitude ?? 0, vessel.altitude);
+    },
+};
+~~~
+
+Klanker serializes it as JSON when KSP calls the part's save hook. The JSON is
+UTF-8/base64-encoded inside the part's `storageBase64` save field, keeping it
+with the craft or game save; it is not a separate file shared across saves.
+Older saves without that field start with `{}`.
+
+Storage survives script replacement, stop/start, and control-point changes.
+These normal runtime teardown paths also take an in-memory JSON checkpoint;
+it reaches disk on the next KSP save. Loading a quicksave restores that save's
+snapshot, not changes made afterward. Copying a part copies its saved values
+into an independent store. Storage belongs to the part, not the script filename:
+use your own namespace or schema version if different scripts share a computer.
+
+The root reference is read-only, but its contents are ordinary JS data. Assign,
+delete, and nest properties normally. To clear it, delete its keys:
+`for (const key of Object.keys(storage)) delete storage[key]`.
+Only finite numbers, strings, booleans, null, plain objects, and dense arrays
+are supported. Functions, undefined, BigInt, class/host objects, cycles, symbol
+keys, accessors, hidden properties, and sparse arrays are rejected rather than
+silently altered by JSON serialization.
+
+Limits are 64 KiB of UTF-8 JSON, 10,000 values, 32 nesting levels, and a 250 ms
+serialization budget. Serialization happens at checkpoints, not every tick.
+If it fails, the window and log report the error and the save keeps the last
+valid snapshot. The worker can repair invalid values before the next save.
+A runtime fault discards all storage edits since the last valid checkpoint;
+storage is not a per-tick transactional database.
+
+Try `storage.js`: it logs restored counters once, increments them without
+controlling the vessel, and lets you verify quicksave/quickload and file reload.
+The automated tests cover the save hook and persistence using host fixtures;
+real KSP save/load validation for this feature is still pending.
+
 ## Logging
 
 `console.log('Altitude:', vessel.altitude)` writes to `KSP.log`, prefixed with
@@ -103,7 +147,7 @@ fault. **Stop worker** disables it without removing the script.
 Changing vessels or control points, packing a vessel, and leaving flight dispose
 the running context. The assignment stays on its part, and enabled computers
 resume when eligible again. JavaScript variables reset when the context is
-recreated; there is no durable JavaScript state API yet. Runtime faults are saved
+recreated; use `ctx.storage` for data that should survive. Runtime faults are saved
 and remain stopped across reactivation and game reload until explicit recovery.
 
 Worker identities are assigned in flight and saved with the part. Craft templates

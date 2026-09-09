@@ -61,6 +61,7 @@ public sealed class KlankerComputer : PartModule
             return;
         }
         if (HighLogic.LoadedSceneIsFlight) computer.Program.EnsureIdentity();
+        computer.CheckpointStorage();
         computer.Program.Save((key, value) => node.SetValue(key, value, true), HighLogic.LoadedSceneIsFlight);
     }
 
@@ -69,6 +70,7 @@ public sealed class KlankerComputer : PartModule
         base.OnCopy(fromModule);
         if (fromModule is KlankerComputer source)
         {
+            source.Computer.CheckpointStorage();
             if (!ReferenceEquals(computer, source.Computer)) computer.Dispose();
             computer = new ComputerWorker(source.Computer.Program.CopyForNewPart());
             unreadableSave = source.unreadableSave?.CreateCopy();

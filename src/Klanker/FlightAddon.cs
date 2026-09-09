@@ -97,6 +97,7 @@ public sealed class FlightAddon : MonoBehaviour
             GUILayout.Label(program.WorkerId.Length == 0 ? "Worker identity assigned at launch." : "Worker: " + program.WorkerId);
             GUILayout.Label("Assigned: " + (program.HasScript ? program.FileName : "none"));
             GUILayout.Label(computer.Status);
+            if (computer.StorageError.Length != 0) GUILayout.Label(computer.StorageError);
             GUILayout.Label($"Successful ticks: {computer.SuccessfulTicks}");
             GUILayout.Label("File in GameData/Klanker/Workers:");
             scriptName = GUILayout.TextField(scriptName, 100);

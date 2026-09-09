@@ -46,7 +46,8 @@ internal static class ViewTests
             controls.pitch == 0 && controls.yaw == 0 && controls.roll == 0, "packaged hopper executes against real ClearScript views");
     }
 
-    private static string TypeName(Type type) => type == typeof(double) ? "number" : type == typeof(string) ? "string" : type.Name;
+    private static string TypeName(Type type) => type == typeof(double) ? "number" :
+        type == typeof(string) ? "string" : type == typeof(ScriptObject) ? "Storage" : type.Name;
 
     internal static void Run()
     {
