@@ -16,6 +16,15 @@ function check(path) {
     return { code: result.status, output: result.stdout + result.stderr };
 }
 
+test('command-part patch is packaged with the ModuleCommand selector and duplicate guard', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const source = await readFile(join(root, 'GameData', 'Klanker', 'Patches', 'command-computers.cfg'), 'utf8');
+    const packaged = await readFile(join(root, 'build', 'GameData', 'Klanker', 'Patches', 'command-computers.cfg'), 'utf8');
+    assert.equal(packaged, source);
+    assert.match(source, /HAS\[@MODULE\[ModuleCommand\],!MODULE\[KlankerComputer\]\]/);
+    assert.match(source, /name\s*=\s*KlankerComputer/);
+});
+
 test('package gate rejects missing framework DLLs, reference DLLs and exposed native DLLs', async () => {
     const fixture = await mkdtemp(join(root, '.cache', 'package-test-'));
     assert.equal(await realpath(fixture), resolve(fixture));

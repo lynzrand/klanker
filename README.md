@@ -9,13 +9,16 @@ the script and reload it without leaving flight.
 Inspired by [ArmorControl](https://github.com/Armo00/ArmorControl),
 by [Armo00](https://github.com/Armo00).
 
-This is an early proof of concept: one worker on the active vessel, loaded from
-an in-game window. There are no computer parts, saved worker state, part APIs,
-remote connections, or MechJeb guidance bindings yet. Try it in a test save.
+Workers now belong to command pods and probe cores. Each part keeps its own
+script assignment; the current control point runs its worker while the others
+wait on standby. Scripts are stored with the craft/save, but JavaScript variables
+are not persistent. Part APIs, remote connections, and MechJeb guidance bindings
+are still future work. Try this early build in a test save.
 
 ## Try it
 
-You need KSP **1.12.5** and MechJeb **2.14.3** (CKAN version `2.14.3.0`).
+You need KSP **1.12.5**, ModuleManager **4.2.3**, and MechJeb **2.14.3**
+(CKAN version `2.14.3.0`). ModuleManager adds computers to command parts.
 MechJeb is a required dependency for now, even though the PoC does not call its
 guidance APIs. Newer MechJeb releases are deliberately not the target.
 
@@ -36,23 +39,28 @@ Deployment preserves edited workers and backs up the previous Klanker folder.
 If installing manually, copy `build/GameData/Klanker` into KSP's `GameData`.
 Keep its subdirectories intact.
 
-1. Enter flight with a simple vessel on the launchpad. The Klanker window should
-   appear near the upper-left; **F8** toggles it.
-2. Load `observe.js`. The successful-tick count should rise without changing
-   any controls.
-3. Try `apoapsis.js` for a simple throttle controller. Enable SAS and launch
+1. In the editor, right-click a pod or probe core and choose **Klanker worker…**.
+   Enter `observe.js` and click **Assign / reload file**.
+2. Enable **Run when active**, save the craft, and launch. The successful-tick
+   count should rise without changing controls. **F8** toggles the window in flight.
+3. Assign `apoapsis.js` for a simple throttle controller. Enable SAS and launch
    manually; it uses full throttle below 100 km apoapsis and cuts it above that.
    It does not steer, stage, or circularize.
 
 ## What has been tested?
 
-The flight UI, script execution, exception reporting, watchdog interruption,
-and manual stop have been exercised in Windows KSP 1.12.5. The ascent example
-ran for thousands of successful ticks. Automated tests cover buffered writes,
-fault handling, native V8 loading, and deployment packaging.
+The original flight-only PoC was exercised in Windows KSP 1.12.5, including
+script execution, faults, watchdog interruption, and manual stop. The new
+part-owned computers pass automated persistence and control-handoff tests using
+host fixtures, but still need an in-game editor/save/load check. Follow the
+[computer test checklist](docs/workers.md#testing-command-part-computers).
+
+The revised [Grasshopper hopper](docs/grasshopper.md) was reported working in
+Windows KSP on 2026-09-09, after switching descent to horizontal-velocity
+cancellation with PID control. It remains a craft-dependent tuning example.
 
 Linux x64 and macOS x64 libraries are included, but in-game testing on those
-platforms is still outstanding. This is not a flight-proven autopilot or a
+platforms is still outstanding. This is not a general-purpose autopilot or a
 sandbox for untrusted scripts.
 
 ## More

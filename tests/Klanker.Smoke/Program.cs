@@ -11,7 +11,8 @@ internal static class Program
         {
             if (args.Length != 1) throw new ArgumentException("Pass the packaged Plugins directory.");
             HostSettings.AuxiliarySearchPath = System.IO.Path.Combine(System.IO.Path.GetFullPath(args[0]), "PluginData");
-            var altitude = 10.0;
+            var vessel = new Vessel { altitude = 10 };
+            var controls = new FlightCtrlState();
             using (var worker = new FlightWorker("""
                 export default { flightTick({vessel}) {
                     vessel.control.throttle = vessel.altitude < 100 ? 0.7 : 0;
@@ -20,9 +21,11 @@ internal static class Program
                 }};
                 """))
             {
-                Check(worker.Tick(_ => altitude)["control.throttle"] == 0.7, "staged throttle");
-                altitude = 200;
-                Check(worker.Tick(_ => altitude)["control.throttle"] == 0, "live reads between ticks");
+                worker.Tick(vessel, controls);
+                Check(controls.mainThrottle == 0.7f, "staged throttle");
+                vessel.altitude = 200;
+                worker.Tick(vessel, controls);
+                Check(controls.mainThrottle == 0, "live reads between ticks");
             }
 
             ExpectFault("export default { flightTick({vessel}) { vessel.control.throttle = 1; throw new Error('rollback'); } }", "rollback");
@@ -42,7 +45,15 @@ internal static class Program
             catch { rejected = true; }
             Check(rejected && watch.Elapsed.TotalSeconds < 5, "module initialization watchdog");
             using (var recreated = new FlightWorker("export default { flightTick() {} };"))
-                Check(recreated.Tick(_ => 0).Count == 0, "dispose/recreate and untouched controls");
+            {
+                controls.mainThrottle = 0.3f;
+                recreated.Tick(vessel, controls);
+                Check(controls.mainThrottle == 0.3f, "dispose/recreate and untouched controls");
+            }
+
+            ViewTests.CheckDeclarations(args[0]);
+            ViewTests.Run();
+            ComputerTests.Run(args[0]);
 
             Console.WriteLine("PASS: native V8, live reads, overlay, rollback, ranges, sync-only, watchdog, validation, recreation.");
             return 0;
@@ -59,13 +70,14 @@ internal static class Program
         using var worker = new FlightWorker(source);
         var faulted = false;
         var committed = false;
+        var controls = new FlightCtrlState { mainThrottle = 0.3f };
         try
         {
-            worker.Tick(_ => 0);
+            worker.Tick(new Vessel(), controls);
             committed = true;
         }
         catch { faulted = true; }
-        Check(faulted && !committed, label);
+        Check(faulted && !committed && controls.mainThrottle == 0.3f, label);
     }
 
     private static void Check(bool condition, string label)

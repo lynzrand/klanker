@@ -17,6 +17,7 @@ function run(command, args, timeout) {
 export async function smokeTest(configuration) {
     process.env.KLANKER_TEST_CONFIGURATION = configuration;
     await run(process.execPath, ['--test', 'tests/deploy.test.mjs'], 15_000);
+    await run(process.execPath, ['--test', 'tests/grasshopper.test.mjs'], 15_000);
     await run(process.execPath, ['--test', 'tests/package.test.mjs'], 30_000);
     const project = join(root, 'tests', 'Klanker.Smoke');
     const plugins = join(root, 'build', 'GameData', 'Klanker', 'Plugins');

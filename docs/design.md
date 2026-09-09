@@ -28,6 +28,14 @@ in KSP's normal flight-control path, live reads, and buffered control writes.
 Reading a property after writing it sees the buffered value. A failed invocation
 discards its writes and releases control; recovery requires an explicit reload.
 
+The current vessel API uses purpose-built C# views exposed through ClearScript.
+Getters read a privately bound KSP vessel directly. Control setters validate and
+store nullable pending values in the control view; successful execution applies
+only values that were written. A shared tick binding is cleared in `finally`,
+along with all pending controls. There is no string-key property dispatcher.
+Only annotated view members are exposed, with reflection and extension methods
+disabled. The script-facing contract lives in `GameData/Klanker/Workers/klanker.d.ts`.
+
 Future part actions, such as staging or activating an engine, should use the same
 buffering model. Their validation and commit behavior still need careful design:
 an action that has already changed KSP cannot simply be undone like a number in
@@ -90,7 +98,7 @@ unloaded-vessel simulation are all outside this PoC.
 
 ## Next milestone
 
-The next substantial step would be a part-backed actor with persistent identity,
-saved state, and script replacement that preserves both. That is separate from
-proving V8 can run and control a vessel, and is not a promise that the broader
-design is already implemented.
+Command parts now have worker identities, saved script assignments, and an
+opt-in run setting. This is the first part-backed slice, not the complete actor
+model above. Durable structured worker state, aliases, deployment revisions,
+and dedicated development tooling remain to be designed and implemented.

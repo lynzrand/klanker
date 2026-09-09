@@ -32,7 +32,8 @@ from the config file's directory. To override it for one deployment:
 pnpm make deploy --configuration Release --ksp "another/path/to/KSP"
 ```
 
-Close KSP first. Deployment replaces Klanker's `Plugins` and `Licenses`, preserves
+Close KSP first. Deployment replaces Klanker's `Plugins`, `Licenses`, `Patches`,
+and the shipped `Workers/klanker.d.ts` API definition, and preserves
 existing worker edits and other local data, and adds any new example workers.
 It does not install MechJeb or change other mods. Symlink and junction deployment
 layouts are rejected.
@@ -84,7 +85,13 @@ The test task exercises deliberately broken packages, safe deployment and worker
 preservation, and real V8 execution. Worker tests cover live reads, buffered writes,
 exceptions, invalid controls, synchronous-only handlers, watchdog interruption,
 and runtime recreation. They run on .NET 9 and, on Windows, .NET Framework, with
-an outer process timeout. CI is configured for Windows, Linux, and macOS.
+an outer process timeout. Part-computer tests also compile the real module and
+coordinator against host fixtures to check save/load, copying, standby, faults,
+control-point handoffs, and callback cleanup. View tests check the packaged
+`.d.ts` against annotated C# members, types, and writability, and exercise the
+actual ClearScript bindings, lifetime guards, and log truncation/rate warnings.
+GitHub CI is currently disabled;
+run these checks locally.
 
 These checks cannot prove every type, method, or native ABI works in Unity Mono.
 See the [README](../README.md#what-has-been-tested) for in-game validation status

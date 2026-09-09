@@ -1,80 +1,138 @@
 using System;
 using System.IO;
+using System.Text;
 using Klanker.Runtime;
 using Microsoft.ClearScript;
 using UnityEngine;
 
 namespace Klanker;
 
-[KSPAddon(KSPAddon.Startup.Flight, false)]
+// Owns the scene UI and the single vessel callback, not the script assignment.
+[KSPAddon(KSPAddon.Startup.FlightAndEditor, false)]
 public sealed class FlightAddon : MonoBehaviour
 {
-    private FlightWorker? worker;
+    private static FlightAddon? instance;
+    private KlankerComputer? selected;
+    private KlankerComputer? active;
+    private ComputerWorker? activeWorker;
     private Vessel? controlledVessel;
-    private Rect window = new(30, 80, 360, 230);
-    private string status = "Stopped. Load a worker to begin.";
+    private Rect window = new(30, 80, 440, 340);
     private string scriptName = "observe.js";
-    private bool visible = true;
-    private long ticks;
+    private string message = "";
+    private bool visible;
 
     public void Awake()
     {
-        visible = true;
+        instance = this;
+        visible = HighLogic.LoadedSceneIsFlight;
         HostSettings.AuxiliarySearchPath = Path.Combine(
             KSPUtil.ApplicationRootPath, "GameData", "Klanker", "Plugins", "PluginData");
-        Debug.Log("[Klanker] Flight addon ready. Window visible; F8 toggles it.");
+        Debug.Log("[Klanker] Computer UI ready. F8 toggles it; part menus select a computer.");
+    }
+
+    internal static void Show(KlankerComputer computer)
+    {
+        if (instance == null) return;
+        instance.Select(computer);
+        instance.visible = true;
+    }
+
+    private void Select(KlankerComputer computer)
+    {
+        selected = computer;
+        scriptName = computer.Computer.Program.HasScript ? computer.Computer.Program.FileName : "observe.js";
+        message = "";
     }
 
     public void Update()
     {
         if (Input.GetKeyDown(KeyCode.F8)) visible = !visible;
-        if (controlledVessel != null && controlledVessel != FlightGlobals.ActiveVessel)
-            Stop("Stopped: active vessel changed. Load explicitly on the new vessel.");
+        var vessel = HighLogic.LoadedSceneIsFlight ? FlightGlobals.ActiveVessel : null;
+        var candidate = FindActiveComputer(vessel);
+        if (candidate != active || vessel != controlledVessel ||
+            (candidate != null && candidate.Computer != activeWorker))
+        {
+            ReleaseAuthority();
+            if (candidate != null && vessel != null)
+            {
+                active = candidate;
+                activeWorker = candidate.Computer;
+                controlledVessel = vessel;
+                activeWorker.SetAuthority(true);
+                controlledVessel.OnFlyByWire += FlyByWire;
+                Debug.Log("[Klanker] Active computer: " + candidate.Computer.Program.WorkerId);
+            }
+        }
+        // A vanished or remote selection must not leave a UI that edits another vessel.
+        if (HighLogic.LoadedSceneIsFlight && selected != null && selected.vessel != vessel) selected = null;
+        if (selected == null && candidate != null) Select(candidate);
+    }
+
+    private static KlankerComputer? FindActiveComputer(Vessel? vessel)
+    {
+        if (vessel == null || !vessel.loaded || vessel.packed) return null;
+        var reference = vessel.GetReferenceTransformPart();
+        if (reference == null || reference.vessel != vessel) return null;
+        var computer = reference.FindModuleImplementing<KlankerComputer>();
+        return computer != null && computer.isEnabled && computer.moduleIsEnabled ? computer : null;
     }
 
     public void OnGUI()
     {
-        if (visible) window = GUILayout.Window(GetInstanceID(), window, DrawWindow, "Klanker flight PoC (F8)");
+        if (visible) window = GUILayout.Window(GetInstanceID(), window, DrawWindow, "Klanker computers (F8)");
     }
 
     private void DrawWindow(int id)
     {
-        GUILayout.Label("Worker in GameData/Klanker/Workers:");
-        scriptName = GUILayout.TextField(scriptName, 100);
-        GUILayout.Label(status);
-        GUILayout.Label($"Successful ticks: {ticks}");
-        if (GUILayout.Button("Load / reload worker")) LoadWorker();
-        if (GUILayout.Button("Stop control")) Stop("Stopped by player.");
-        GUI.DragWindow(new Rect(0, 0, 360, 22));
+        if (selected == null)
+        {
+            GUILayout.Label("Right-click a command pod or probe core and choose Klanker worker…");
+            GUILayout.Label("Missing that button? Check that ModuleManager and Klanker's command-computers patch are installed.");
+        }
+        else
+        {
+            var computer = selected.Computer;
+            var program = computer.Program;
+            GUILayout.Label("Computer: " + selected.part.partInfo.title);
+            GUILayout.Label(program.WorkerId.Length == 0 ? "Worker identity assigned at launch." : "Worker: " + program.WorkerId);
+            GUILayout.Label("Assigned: " + (program.HasScript ? program.FileName : "none"));
+            GUILayout.Label(computer.Status);
+            GUILayout.Label($"Successful ticks: {computer.SuccessfulTicks}");
+            GUILayout.Label("File in GameData/Klanker/Workers:");
+            scriptName = GUILayout.TextField(scriptName, 100);
+            if (GUILayout.Button("Assign / reload file")) AssignScript();
+            var requested = GUILayout.Toggle(program.RunRequested, "Run when active (saved with this part)");
+            if (requested != program.RunRequested) Invoke(() => { if (requested) computer.Start(); else computer.Stop(); });
+            if (program.HasScript && GUILayout.Button("Start / restart assigned script")) Invoke(computer.Start);
+            if (GUILayout.Button("Stop worker")) computer.Stop();
+            if (active != null && active != selected && GUILayout.Button("Show active control point")) Select(active);
+            if (HighLogic.LoadedSceneIsFlight && active == null)
+                GUILayout.Label("No active computer. Use Control from Here on a command part.");
+            if (message.Length != 0) GUILayout.Label(message);
+        }
+        GUI.DragWindow(new Rect(0, 0, 440, 22));
     }
 
-    private void LoadWorker()
+    private void AssignScript()
     {
-        FlightWorker? candidate = null;
-        try
+        if (selected == null) return;
+        Invoke(() =>
         {
-            var vessel = FlightGlobals.ActiveVessel;
-            if (vessel == null || !vessel.loaded || vessel.packed)
-                throw new InvalidOperationException("An active, unpacked vessel is required.");
-            if (Path.GetFileName(scriptName) != scriptName || !scriptName.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Enter a .js filename without directories.");
+            ComputerProgram.Validate(scriptName, "");
             var path = Path.Combine(KSPUtil.ApplicationRootPath, "GameData", "Klanker", "Workers", scriptName);
-            if (new FileInfo(path).Length > 128 * 1024)
-                throw new InvalidOperationException("PoC workers are limited to 128 KiB.");
-            candidate = new FlightWorker(File.ReadAllText(path));
-            Stop("Stopped.");
-            worker = candidate;
-            candidate = null;
-            controlledVessel = vessel;
-            controlledVessel.OnFlyByWire += FlyByWire;
-            ticks = 0;
-            status = $"Running on {vessel.vesselName}";
-            Debug.Log("[Klanker] " + status);
-        }
+            if (new FileInfo(path).Length > ComputerProgram.MaximumBytes)
+                throw new InvalidOperationException("Workers are limited to 128 KiB.");
+            selected.AssignScript(scriptName, File.ReadAllText(path, new UTF8Encoding(false, true)));
+            message = "Script copied into this part. Save the craft/game to keep it.";
+        });
+    }
+
+    private void Invoke(Action action)
+    {
+        try { message = ""; action(); }
         catch (Exception exception)
         {
-            candidate?.Dispose();
-            status = "Load failed: " + exception.Message + (worker != null ? " (previous worker still running)" : "");
+            message = exception.Message;
             Debug.LogError("[Klanker] " + exception);
         }
     }
@@ -82,53 +140,39 @@ public sealed class FlightAddon : MonoBehaviour
     private void FlyByWire(FlightCtrlState controls)
     {
         var vessel = controlledVessel;
-        if (worker == null || vessel == null || vessel != FlightGlobals.ActiveVessel || vessel.packed || PauseMenu.isOpen)
+        var worker = activeWorker;
+        // Check again inside the callback: control-point/topology changes can
+        // happen between Update and the physics callback. Never let the old owner write.
+        if (vessel == null || vessel != FlightGlobals.ActiveVessel || active == null ||
+            FindActiveComputer(vessel) != active || active.Computer != worker)
+        {
+            ReleaseAuthority();
             return;
+        }
+        if (worker == null || !worker.IsRunning || PauseMenu.isOpen) return;
         try
         {
-            var writes = worker.Tick(key => key switch
-            {
-                "altitude" => vessel.altitude,
-                "verticalSpeed" => vessel.verticalSpeed,
-                "surfaceSpeed" => vessel.srfSpeed,
-                "orbit.apoapsis" => vessel.orbit.ApA,
-                "orbit.periapsis" => vessel.orbit.PeA,
-                "control.throttle" => controls.mainThrottle,
-                "control.pitch" => controls.pitch,
-                "control.yaw" => controls.yaw,
-                "control.roll" => controls.roll,
-                _ => throw new InvalidOperationException("Unknown vessel property: " + key),
-            });
-            foreach (var write in writes)
-            {
-                var value = (float)write.Value;
-                switch (write.Key)
-                {
-                    case "control.throttle": controls.mainThrottle = value; break;
-                    case "control.pitch": controls.pitch = value; break;
-                    case "control.yaw": controls.yaw = value; break;
-                    case "control.roll": controls.roll = value; break;
-                }
-            }
-            ticks++;
+            worker.Tick(vessel, controls);
         }
         catch (Exception exception)
         {
-            Stop("FAULTED: " + exception.Message);
-            ScreenMessages.PostScreenMessage("Klanker fault: control released. Reload to restart.", 8, ScreenMessageStyle.UPPER_CENTER);
+            ScreenMessages.PostScreenMessage("Klanker worker faulted. Restart it from its computer window.", 8, ScreenMessageStyle.UPPER_CENTER);
             Debug.LogError("[Klanker] " + exception);
         }
     }
 
-    private void Stop(string message)
+    private void ReleaseAuthority()
     {
         if (controlledVessel != null) controlledVessel.OnFlyByWire -= FlyByWire;
+        activeWorker?.SetAuthority(false);
         controlledVessel = null;
-        var previous = worker;
-        worker = null;
-        previous?.Dispose();
-        status = message;
+        active = null;
+        activeWorker = null;
     }
 
-    public void OnDestroy() => Stop("Flight scene closed.");
+    public void OnDestroy()
+    {
+        ReleaseAuthority();
+        if (instance == this) instance = null;
+    }
 }

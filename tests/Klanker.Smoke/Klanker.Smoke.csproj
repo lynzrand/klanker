@@ -6,6 +6,11 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../src/Klanker/Runtime/FlightWorker.cs" Link="FlightWorker.cs" />
+    <Compile Include="../../src/Klanker/Runtime/VesselView.cs" Link="VesselView.cs" />
+    <Compile Include="../../src/Klanker/Runtime/ComputerProgram.cs" Link="ComputerProgram.cs" />
+    <Compile Include="../../src/Klanker/Runtime/ComputerWorker.cs" Link="ComputerWorker.cs" />
+    <Compile Include="../../src/Klanker/KlankerComputer.cs" Link="KlankerComputer.cs" />
+    <Compile Include="../../src/Klanker/FlightAddon.cs" Link="FlightAddon.cs" />
     <PackageReference Include="Microsoft.ClearScript.V8" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" PrivateAssets="all" Condition="'$(TargetFramework)' == 'net472'" />
   </ItemGroup>

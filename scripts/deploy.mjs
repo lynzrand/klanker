@@ -61,11 +61,15 @@ export async function deploy(kspPath, source = resolve(import.meta.dirname, '..'
     try {
         await cp(source, staging, { recursive: true });
         if (upgrading) {
-            // Replace binaries and upstream notices completely; retain local workers
+            // Replace binaries, shipped patches, and notices; retain local workers
             // and other user data, including files added by future runtime versions.
             for (const name of await readdir(destination)) {
-                if (name !== 'Plugins' && name !== 'Licenses') {
-                    await cp(join(destination, name), join(staging, name), { recursive: true });
+                if (name !== 'Plugins' && name !== 'Licenses' && name !== 'Patches') {
+                    await cp(join(destination, name), join(staging, name), {
+                        recursive: true,
+                        // This definition is part of the API, not an editable worker.
+                        filter: path => resolve(path) !== resolve(destination, 'Workers', 'klanker.d.ts'),
+                    });
                 }
             }
             await rename(destination, backup);

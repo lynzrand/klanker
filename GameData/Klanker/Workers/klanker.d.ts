@@ -1,0 +1,160 @@
+/** Klanker worker API. Live vessel access is only valid during flightTick. */
+declare namespace Klanker {
+    interface Worker {
+        /** Synchronous: promises/async handlers are rejected. */
+        flightTick(context: FlightContext): void;
+    }
+
+    interface FlightContext {
+        readonly vessel: VesselView;
+        /** KSP universal time, simulation seconds. Only readable inside flightTick. */
+        readonly universalTime: number;
+        /** Current physics timestep in simulation seconds, not wall time. */
+        readonly deltaTime: number;
+    }
+
+    /** A live, read-only C# view, not a plain JS record or raw KSP Vessel. */
+    interface VesselView {
+        /** KSP vessel UUID; distinct from the command part's worker identity. */
+        readonly id: string;
+        readonly name: string;
+        /** KSP enum name, such as PRELAUNCH, FLYING, ORBITING, or ESCAPING. */
+        readonly situation: string;
+        /** Current total vessel mass, kilograms. */
+        readonly mass: number;
+        /** Degrees north. */
+        readonly latitude: number;
+        /** KSP longitude in degrees; not normalized by Klanker. */
+        readonly longitude: number;
+        /** Metres above the body's sea-level reference radius. */
+        readonly altitude: number;
+        /** KSP terrain elevation in metres above the reference radius. May be negative. */
+        readonly terrainAltitude: number;
+        /** altitude - terrainAltitude, metres; not a water-surface radar altitude. */
+        readonly heightAboveTerrain: number;
+        /** Metres/second, positive away from the body. */
+        readonly verticalSpeed: number;
+        /** Surface-relative speed magnitude, metres/second. */
+        readonly surfaceSpeed: number;
+        /** Horizontal surface-relative speed, metres/second. */
+        readonly horizontalSpeed: number;
+        /** Body-relative orbital velocity magnitude, metres/second. */
+        readonly orbitalSpeed: number;
+        readonly orbit: OrbitView;
+        readonly body: BodyView;
+        readonly velocity: VelocityView;
+        readonly resources: ResourcesView;
+        /** The only writable vessel properties. */
+        readonly control: ControlView;
+        readonly attitude: AttitudeView;
+    }
+
+    interface OrbitView {
+        /** Apoapsis height above the reference radius, metres; KSP value on open trajectories. */
+        readonly apoapsis: number;
+        /** Periapsis height above the reference radius, metres. May be negative. */
+        readonly periapsis: number;
+        /** Seconds; NaN for eccentricity >= 1. */
+        readonly timeToApoapsis: number;
+        /** KSP time to periapsis, seconds; may be negative after passage on open trajectories. */
+        readonly timeToPeriapsis: number;
+        /** Inclination to the body's equatorial plane, degrees. */
+        readonly inclination: number;
+        readonly eccentricity: number;
+        /** Metres; signed KSP orbital element. */
+        readonly semiMajorAxis: number;
+        /** Seconds; NaN for eccentricity >= 1. */
+        readonly period: number;
+    }
+
+    interface BodyView {
+        /** KSP bodyName, not a localized display label. */
+        readonly name: string;
+        /** Sea-level reference radius, metres. */
+        readonly radius: number;
+        /** Standard gravitational parameter, metres cubed / second squared. */
+        readonly gravitationalParameter: number;
+    }
+
+    interface VelocityView {
+        /** Surface-relative velocity in KSP's current Unity world axes, metres/second. */
+        readonly surface: VectorView;
+        /** Body-relative orbital velocity in the same Unity world axes, metres/second. */
+        readonly orbital: VectorView;
+        /** Surface-relative velocity in the active control part's local axes, m/s. */
+        readonly localSurface: LocalVectorView;
+    }
+
+    interface AttitudeView {
+        /** Radially outward unit direction in control-part local axes. */
+        readonly up: LocalVectorView;
+        /** North/east tangent unit directions; ill-defined at the geographical poles. */
+        readonly north: LocalVectorView;
+        readonly east: LocalVectorView;
+        /** Root rigidbody angular velocity expressed in control-part local axes, rad/s. */
+        readonly angularVelocity: LocalVectorView;
+    }
+
+    /**
+     * Active Control from Here frame: x=right, y=nose, z=belly.
+     * Angular velocity uses Unity's geometric rotation convention, not control
+     * input signs. Values are live and require an active flightTick.
+     */
+    interface LocalVectorView {
+        readonly x: number;
+        readonly y: number;
+        readonly z: number;
+    }
+
+    /**
+     * Live components, not a Unity vector object. World axes are not vessel-local
+     * or north/east/up; do not assume a persistent inertial frame across ticks.
+     */
+    interface VectorView {
+        readonly x: number;
+        readonly y: number;
+        readonly z: number;
+    }
+
+    interface ResourcesView {
+        /**
+         * Detached totals over all current vessel parts, including locked tanks.
+         * Uses a case-sensitive resource definition name, e.g. "ElectricCharge".
+         * Missing resources return zero amount and capacity, not null.
+         * Does not model crossfeed, engine accessibility, or staging.
+         */
+        get(name: string): ResourceTotals;
+    }
+
+    interface ResourceTotals {
+        readonly name: string;
+        /** Resource units, not kilograms or litres. */
+        readonly amount: number;
+        /** Resource units. */
+        readonly capacity: number;
+    }
+
+    interface ControlView {
+        /** Finite number, 0..1. Reads return the pending value if written this tick. */
+        throttle: number;
+        /** Finite number, -1..1. */
+        pitch: number;
+        /** Finite number, -1..1. */
+        yaw: number;
+        /** Finite number, -1..1. */
+        roll: number;
+    }
+}
+
+// Compatible with editors that already load the standard Console declaration.
+interface Console {
+    /**
+     * Writes to KSP.log with the worker identity and script filename.
+     * Works during module initialization (including assignment validation).
+     * At most 32 arguments / 2048 UTF-16 code units per message and 20 messages
+     * per one-second runtime window. Truncation and rate limiting emit warnings,
+     * each at most once per window. Logs are not rolled back on worker faults.
+     */
+    log(...values: unknown[]): void;
+}
+declare var console: Console;
