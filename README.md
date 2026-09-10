@@ -1,12 +1,13 @@
 # Klanker
 
-**Write your autopilot in TypeScript. Run it inside Kerbal Space Program.**
+> A suspiciously modern piece of flight software.
+>
+> Manage your spacecraft like web workers.
 
-Klanker embeds a V8 engine in KSP and runs your code on every physics tick. Read
-your vessel's telemetry, command its throttle, attitude, staging, and action
-groups, and redeploy a new script without leaving flight. Think of it as a kOS
-for people who write JavaScript — a suspiciously modern piece of flight software
-for a 2011 game.
+Klanker embeds a V8 engine in Kerbal Space Program and runs your TypeScript on
+every physics tick. Read your vessel's telemetry, command its throttle, attitude,
+staging, and action groups, and redeploy a new script without leaving flight.
+It's a kOS for people who write JavaScript.
 
 ```ts
 // ascent.ts — full throttle below a 100 km apoapsis, then cut it.
