@@ -1,7 +1,7 @@
 {
   "name": "klanker",
   "version": "0.1.0",
-  "description": "Klanker worker standard library: vectors, PID, attitude, coordinate frames, and MechJeb helpers.",
+  "description": "Klanker worker standard library: vectors, PID, attitude, coordinate frames, orbital mechanics, and MechJeb helpers.",
   "license": "MPL-2.0",
   "type": "module",
   "main": "./index.ts",
@@ -26,6 +26,10 @@
     "./frame": {
       "types": "./frame.ts",
       "default": "./frame.ts"
+    },
+    "./orbit": {
+      "types": "./orbit.ts",
+      "default": "./orbit.ts"
     },
     "./mechjeb": {
       "types": "./mechjeb.ts",

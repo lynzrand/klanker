@@ -152,10 +152,14 @@ function parse(argv: string[]): { flags: Flags; positionals: string[] } {
     return { flags, positionals };
 }
 
-function target(flags: Flags, positional?: string): { id: string } | { alias: string } {
+type Target = { id: string } | { alias: string } | { active: true };
+
+// `fallbackActive` lets deploy omit the selector and target the active part.
+function target(flags: Flags, positional?: string, fallbackActive = false): Target {
     if (flags.id) return { id: flags.id };
     if (flags.to) return { alias: flags.to };
     if (positional) return /^[0-9a-f]{32}$/i.test(positional) ? { id: positional } : { alias: positional };
+    if (fallbackActive) return { active: true };
     throw new Error('Specify a target with --to <alias> or --id <workerId>.');
 }
 
@@ -171,7 +175,8 @@ function usage(): void {
   ls                           List onboard actors.
   build <file>                 Bundle a worker (.ts or .js) and print it (no game needed).
   check <file>                 Type-check a worker against the host API and libraries.
-  deploy <file> --to <alias>   Bundle and deploy a worker (--id <workerId> works too).
+  deploy <file>                Bundle and deploy to the active part (--to <alias>
+              [--to <alias>]   or --id <workerId> selects another actor).
               [--run]          Start it after deploying.
   restart <alias|workerId>     Restart an actor.
   stop <alias|workerId>        Stop an actor.
@@ -238,7 +243,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
                 const file = positionals.shift();
                 if (!file) throw new Error('deploy needs a .ts or .js file.');
                 const result = await client.request('deploy', {
-                    target: target(flags),
+                    target: target(flags, undefined, true),
                     file: basename(file).replace(/\.[^.]+$/, '') + '.js',
                     source: await bundleWorker(file),
                     run: flags.run === true,

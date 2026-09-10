@@ -83,15 +83,19 @@ up the previous Klanker folder.
    enter `observe.js`, and click **Assign / reload file**.
 2. Enable **Run when active**, save the craft, and launch. The successful-tick
    count rises without touching the controls. **F8** toggles the window in flight.
-3. Try `apoapsis.js` for a throttle controller, or the [Grasshopper
-   hopper](docs/grasshopper.md) for a full climb-and-land example.
+3. Try `apoapsis.js` for a throttle controller, the [Grasshopper
+   hopper](docs/grasshopper.md) for a climb-and-land example, or `ascent.js` for a
+   full launch-to-orbit autopilot (gravity turn, Max-Q throttle limiting,
+   autostaging on flameout, and circularisation) that runs on a stock Kerbal X
+   without MechJeb.
 
 From the CLI instead:
 
 ```sh
 pnpm klanker ls                                  # what's flying
 pnpm klanker deploy workers/samples/observe.ts --to guidance --run
-pnpm klanker logs -f --to guidance
+pnpm klanker deploy workers/samples/ascent.ts --to ascent --run
+pnpm klanker logs -f --to ascent
 ```
 
 The example sources live in [`workers/samples/`](workers); `pnpm make build`

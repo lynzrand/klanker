@@ -34,7 +34,8 @@ klanker ping                         Check the bridge.
 klanker ls                           List onboard actors.
 klanker build <file>                 Bundle a worker and print it (no game needed).
 klanker check <file>                 Type-check a worker against the host API and libs.
-klanker deploy <file> --to <alias>   Bundle and deploy a worker to an actor.
+klanker deploy <file>                Bundle and deploy a worker to the active part.
+                      --to <alias>   Address a different actor by alias instead.
                       --id <id>      Address the actor by workerId instead.
                       [--run]        Start it after deploying.
 klanker restart <alias|workerId>     Restart an actor.
@@ -55,7 +56,10 @@ declaration and the libraries, so you catch mistakes before deploying. See
 
 Aliases are human selectors and need not be unique; if one matches several
 actors, the CLI reports the ambiguity and you should use the `workerId` from
-`ls`. Identities stay on the part: `deploy` replaces the saved script and its
+`ls`. With no selector, `deploy` targets the active part: the computer on the
+active vessel's current **Control from Here** part, which must be enabled. In
+the editor there is no active vessel, so pass `--to` or `--id` there.
+Identities stay on the part: `deploy` replaces the saved script and its
 storage is preserved, exactly like an in-game reload. The deployed source is
 embedded in the save, so a craft keeps working without the CLI or any local
 file.

@@ -37,6 +37,24 @@ export function toWorld(context: FrameContext, local: Vec3): Vec3 {
     return { x: dot(local, east), y: dot(local, north), z: dot(local, up) };
 }
 
+const radians = Math.PI / 180;
+
+/**
+ * A direction in control-frame axes from a pitch above the local horizon and a
+ * compass azimuth. `pitch` 0 is straight up (radial out) and 90 is horizontal;
+ * `azimuth` is measured from north toward east, so the default 90 is due east —
+ * the usual launch heading for a prograde equatorial orbit. Feed the result
+ * straight to AttitudeHold.aim. Up/north/east are already control-frame
+ * directions, so no world conversion is needed.
+ */
+export function tilt(context: FrameContext, pitchDegrees: number, azimuthDegrees = 90): Vec3 {
+    const { east, north, up } = basis(context);
+    const pitch = pitchDegrees * radians;
+    const azimuth = azimuthDegrees * radians;
+    const horizontal = add(scale(north, Math.cos(azimuth)), scale(east, Math.sin(azimuth)));
+    return normalize(add(scale(up, Math.cos(pitch)), scale(horizontal, Math.sin(pitch))));
+}
+
 export const localize = toLocal;
 export const globalize = toWorld;
 
@@ -85,5 +103,5 @@ export function surfaceBasis(context: FrameContext): { prograde: Vec3; north: Ve
 export default {
     basis, toLocal, toWorld, localize, globalize, prograde, retrograde,
     surfacePrograde, surfaceRetrograde, radialOut, radialIn, northUp, east,
-    normal, antiNormal, orbitalBasis, surfaceBasis,
+    normal, antiNormal, orbitalBasis, surfaceBasis, tilt,
 };

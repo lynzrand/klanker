@@ -49,6 +49,39 @@ declare namespace Klanker {
         readonly horizontalSpeed: number;
         /** Body-relative orbital velocity magnitude, metres/second. */
         readonly orbitalSpeed: number;
+        /** Ambient pressure, kPa. Zero in vacuum. */
+        readonly staticPressure: number;
+        /** Aerodynamic dynamic pressure, kPa. The standard Max-Q throttle input. */
+        readonly dynamicPressure: number;
+        /** Atmospheric density in KSP's raw units; zero in vacuum. */
+        readonly atmosphericDensity: number;
+        /** Current Mach number. */
+        readonly mach: number;
+        /** Instantaneous g-force felt by the vessel. */
+        readonly geeForce: number;
+        /**
+         * KSP's staging-list index. It decrements as stages fire and reaches 0 at
+         * the final stage, so `currentStage > 0` means another stage remains.
+         */
+        readonly currentStage: number;
+        /**
+         * Summed live thrust in kN across every engine on the vessel. This is the
+         * figure for local thrust-to-weight while a stage is burning.
+         */
+        readonly currentThrust: number;
+        /**
+         * Summed vacuum thrust in kN of the engines that are lit and operational,
+         * at full throttle and including their thrust limiters. Throttle-independent,
+         * so it is the figure for burn-time and delta-v planning.
+         */
+        readonly availableThrust: number;
+        /**
+         * Number of engines on the vessel. With flameoutEngines and the thrust
+         * totals, this covers autostaging without walking `parts` every tick.
+         */
+        readonly engineCount: number;
+        /** Number of engines currently in flameout: lit but starved of propellant. */
+        readonly flameoutEngines: number;
         readonly orbit: OrbitView;
         readonly body: BodyView;
         readonly velocity: VelocityView;
@@ -89,6 +122,10 @@ declare namespace Klanker {
         readonly radius: number;
         /** Standard gravitational parameter, metres cubed / second squared. */
         readonly gravitationalParameter: number;
+        /** False for airless bodies, where atmosphereDepth is left at 0. */
+        readonly hasAtmosphere: boolean;
+        /** Thickness of the atmosphere above the reference radius, metres. */
+        readonly atmosphereDepth: number;
     }
 
     interface VelocityView {
@@ -98,6 +135,13 @@ declare namespace Klanker {
         readonly orbital: VectorView;
         /** Surface-relative velocity in the active control part's local axes, m/s. */
         readonly localSurface: LocalVectorView;
+        /**
+         * Body-relative orbital velocity in the active control part's local axes,
+         * m/s. Unlike converting `orbital` through the frame helpers, this is the
+         * host's exact transform of the inertial vector, so it is the correct
+         * direction to hold for an exoatmospheric prograde burn.
+         */
+        readonly localOrbital: LocalVectorView;
     }
 
     interface AttitudeView {
@@ -184,6 +228,14 @@ declare namespace Klanker {
         readonly stage: number;
         /** Name tags from ModuleNameTag or KOSNameTag, de-duplicated. */
         readonly tags: string[];
+        /** Whether fuel may flow through this part, joining a crossfeed pool. */
+        readonly crossfeed: boolean;
+        /**
+         * True when staging this part separates it: a decoupler, anchored
+         * decoupler, or procedural fairing. Distinguishes a jettison stage from
+         * one that only ignites an engine.
+         */
+        readonly decoupler: boolean;
         readonly resources: PartResourcesView;
         readonly engines: EnginesView;
     }
@@ -206,6 +258,30 @@ declare namespace Klanker {
         readonly thrust: number;
         readonly ignited: boolean;
         readonly operational: boolean;
+        /**
+         * KSP's flameout flag: lit but starved of propellant. The primary signal
+         * for autostaging, since it distinguishes burnout from a commanded
+         * shutdown.
+         */
+        readonly flameout: boolean;
+        /**
+         * Vacuum thrust at full throttle with the current thrust limiter, kN.
+         * Throttle-independent, so it is the right figure for burn-time planning.
+         */
+        readonly vacuumThrust: number;
+        /** Current effective specific impulse, seconds. */
+        readonly isp: number;
+        /** Current throttle setting, 0..1. */
+        readonly currentThrottle: number;
+        /**
+         * Crossfeed-aware propellant in raw resource units: how much this engine
+         * can actually reach through fuel lines and crossfeed. The minimum across
+         * the engine's propellants (LiquidFuel, Oxidizer, ...), so zero means the
+         * engine cannot run even if other tanks on the vessel are full.
+         */
+        readonly propellantAvailable: number;
+        /** Crossfeed-aware propellant capacity, raw resource units. */
+        readonly propellantCapacity: number;
         /**
          * 0..1 thrust limiter. Buffered: reads see the pending value, and a
          * failed tick leaves the engine unchanged.

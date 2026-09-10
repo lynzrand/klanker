@@ -13,6 +13,7 @@ workers/
 | --- | --- |
 | `observe.ts` | Reads telemetry and logs once; changes no controls. |
 | `apoapsis.ts` | Full throttle below a 100 km apoapsis, then cut. |
+| `ascent.ts` | Launch-to-orbit autopilot for a stock Kerbal X: gravity turn, Q/acceleration limits, autostaging, circularisation. State lives in `ctx.storage`. |
 | `storage.ts` | Demonstrates `ctx.storage` across quicksave/quickload. |
 | `grasshopper.ts` | Experimental climb, translate, and slow descent. Read [its guide](../docs/grasshopper.md) first. |
 | `fault.ts` | Intentionally throws after a buffered write (rollback test). |

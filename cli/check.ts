@@ -9,7 +9,7 @@ import { hostTypes, libRoot } from './package-paths.ts';
 const require = createRequire(import.meta.url);
 const tsc = require.resolve('typescript/bin/tsc');
 
-const libraryModules = ['vec', 'pid', 'attitude', 'frame', 'mechjeb'];
+const libraryModules = ['vec', 'pid', 'attitude', 'frame', 'orbit', 'mechjeb'];
 
 export interface CheckResult {
     code: number;

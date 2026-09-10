@@ -94,8 +94,28 @@ public sealed class PartRef
     // KSP inverseStage: lower numbers fire earlier.
     [ScriptMember("stage")] public int Stage { get { _ = binding.Vessel; return part.inverseStage; } }
     [ScriptMember("tags")] public string[] Tags { get { _ = binding.Vessel; return NameTags.ForPart(part); } }
+    // Whether fuel may flow through this part, i.e. whether it joins a
+    // crossfeed-connected pool.
+    [ScriptMember("crossfeed")] public bool Crossfeed { get { _ = binding.Vessel; return part.fuelCrossFeed; } }
+    // True when staging this part separates it (decoupler, anchored decoupler,
+    // or procedural fairing). Distinguishes a jettison stage from one that only
+    // ignites an engine.
+    [ScriptMember("decoupler")] public bool Decoupler { get { _ = binding.Vessel; return IsSeparator(part); } }
     [ScriptMember("resources")] public PartResourcesView Resources { get; }
     [ScriptMember("engines")] public EnginesView Engines { get; }
+
+    // Module names are matched as strings so this view does not depend on the
+    // decoupler/fairing types being public in the stripped KSP definitions.
+    private static bool IsSeparator(Part part)
+    {
+        foreach (PartModule module in part.Modules)
+        {
+            var name = module.GetType().Name;
+            if (name == "ModuleDecouple" || name == "ModuleAnchoredDecoupler" ||
+                name == "ModuleProceduralFairing") return true;
+        }
+        return false;
+    }
 }
 
 // Totals over a single part, matching vessel.resources.get semantics.
@@ -151,6 +171,33 @@ public sealed class EngineView
     [ScriptMember("thrust")] public double Thrust { get { _ = binding.Vessel; return engine.finalThrust; } }
     [ScriptMember("ignited")] public bool Ignited { get { _ = binding.Vessel; return engine.getIgnitionState; } }
     [ScriptMember("operational")] public bool Operational { get { _ = binding.Vessel; return engine.isOperational; } }
+    // KSP's flameout flag: lit but starved of propellant. The primary signal for
+    // autostaging, since it distinguishes burnout from a commanded shutdown.
+    [ScriptMember("flameout")] public bool Flameout { get { _ = binding.Vessel; return engine.flameout; } }
+    // Vacuum thrust at full throttle with the current thrust limiter, kN.
+    // Throttle-independent, so it is the right figure for burn-time planning.
+    [ScriptMember("vacuumThrust")] public double VacuumThrust { get { _ = binding.Vessel; return engine.MaxThrustOutputVac(true); } }
+    // Current effective specific impulse, seconds.
+    [ScriptMember("isp")] public double Isp { get { _ = binding.Vessel; return engine.realIsp; } }
+    [ScriptMember("currentThrottle")] public double CurrentThrottle { get { _ = binding.Vessel; return engine.currentThrottle; } }
+    // Crossfeed-aware propellant, raw resource units: how much this engine can
+    // actually reach through fuel lines and crossfeed, and its capacity. The
+    // minimum across the engine's propellants (LiquidFuel, Oxidizer, ...), so
+    // zero means the engine cannot run even if other tanks on the vessel are full.
+    [ScriptMember("propellantAvailable")] public double PropellantAvailable => Propellant(capacity: false);
+    [ScriptMember("propellantCapacity")] public double PropellantCapacity => Propellant(capacity: true);
+    private double Propellant(bool capacity)
+    {
+        _ = binding.Vessel;
+        var part = engine.part;
+        double minimum = double.PositiveInfinity;
+        foreach (Propellant propellant in engine.propellants)
+        {
+            propellant.UpdateConnectedResources(part);
+            minimum = Math.Min(minimum, capacity ? propellant.totalResourceCapacity : propellant.totalResourceAvailable);
+        }
+        return double.IsPositiveInfinity(minimum) ? 0 : minimum;
+    }
     // 0..1 thrust limiter, buffered with read-after-write within the tick.
     [ScriptMember("thrustLimiter")]
     public double ThrustLimiter

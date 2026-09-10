@@ -64,22 +64,52 @@ hold.killRotation(ctx);              // damp only
 
 ## klanker:frame
 
-Converts between KSP Unity world axes (used by `vessel.velocity.*` and body
-telemetry) and the control frame (used by `vessel.attitude.*` and writable
-controls), and builds the usual directions.
+Builds directions in the active control frame from `vessel.attitude.*` (which
+are already control-frame vectors), and converts between the world east/north/up
+components and the control frame.
 
-- `toLocal(ctx, world)` / `localize`, `toWorld(ctx, local)` / `globalize`
-- `prograde`, `retrograde`, `surfacePrograde`, `surfaceRetrograde`
+- `tilt(ctx, pitchDegrees, azimuthDegrees = 90)` — a direction `pitch` degrees
+  above the horizon at a compass azimuth from north; 0 is straight up, 90 is
+  horizontal, and the default azimuth 90 is due east. Feed it to `AttitudeHold`.
+- `prograde`, `retrograde`, `surfacePrograde`, `surfaceRetrograde` — built from
+  `vessel.velocity.orbital`/`surface`, so they return **world-axis** vectors.
 - `radialOut`, `radialIn`, `northUp`, `east`, `normal`, `antiNormal`
 - `orbitalBasis`, `surfaceBasis`
+- `toLocal(ctx, world)` / `localize`, `toWorld(ctx, local)` / `globalize`
 
 ```js
 import frame from 'klanker:frame';
-const local = frame.toLocal(ctx, frame.prograde(ctx)); // prograde in control axes
+const target = frame.tilt(ctx, 45);        // 45 degrees above the eastern horizon
 ```
 
-The conversion uses `vessel.attitude.east/north/up`, so it is exact for the
-current tick's control frame.
+`toLocal`/`toWorld` treat the argument's components as east/north/up, so they
+only round-trip correctly for vectors already expressed in that basis. They are
+not a general world transform: KSP's Unity world axes are not east/north/up, so
+do not feed a raw `vessel.velocity.orbital` through `toLocal`. For velocity use
+the host's exact transforms instead — `vessel.velocity.localSurface` and
+`vessel.velocity.localOrbital`, both already in control axes.
+
+## klanker:orbit
+
+Two-body formulas for launch and transfer guidance: plain numbers and
+`{ radius, gravitationalParameter }` bodies, metres and seconds and kilograms,
+matching `vessel.mass` and the kN thrust fields.
+
+- `gravity(mu, radius)`, `circularSpeed(mu, radius)`, `escapeSpeed(mu, radius)`
+- `visViva(mu, radius, semiMajorAxis)`, `apoapsisSpeed(...)`, `periapsisSpeed(...)`
+- `period(mu, semiMajorAxis)`
+- `altitudeToRadius(body, altitude)`, `radiusToAltitude(body, radius)`
+- `circularizationDeltaV(mu, radius, semiMajorAxis)`
+- `burnTime(massKg, deltaV, thrustKN)` — constant-thrust estimate
+- `rocketBurnTime(massKg, deltaV, thrustKN, isp)` — from the rocket equation
+- `standardGravity`
+
+```js
+import orbit from 'klanker:orbit';
+const apR = orbit.altitudeToRadius(vessel.body, vessel.orbit.apoapsis);
+const dv = orbit.circularizationDeltaV(vessel.body.gravitationalParameter, apR, vessel.orbit.semiMajorAxis);
+const seconds = orbit.rocketBurnTime(vessel.mass, dv, vessel.availableThrust, vacuumIsp);
+```
 
 ## klanker:mechjeb
 

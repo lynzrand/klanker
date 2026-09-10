@@ -20,7 +20,14 @@
         "resolveJsonModule": true,
         "forceConsistentCasingInFileNames": true,
         "skipLibCheck": true,
-        "noEmit": true
+        "noEmit": true,
+        // Workers import the stdlib as `klanker` / `klanker/<name>`; map those
+        // to lib/ so the workspace type-check resolves them the way the bundler does.
+        "baseUrl": ".",
+        "paths": {
+            "klanker": ["./lib/index.ts"],
+            "klanker/*": ["./lib/*"]
+        }
     },
     "include": ["Herebyfile.ts", "cli/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "workers/**/*.ts"],
     "exclude": ["node_modules", "cli/dist", "build", ".cache", ".nuget"]

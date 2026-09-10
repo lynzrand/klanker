@@ -22,6 +22,7 @@ export async function smokeTest(configuration: string): Promise<void> {
     await run(process.execPath, ['--test', 'tests/bridge-cli.test.ts'], 15_000);
     await run(process.execPath, ['--test', 'tests/deploy.test.ts'], 15_000);
     await run(process.execPath, ['--test', 'tests/grasshopper.test.ts'], 15_000);
+    await run(process.execPath, ['--test', 'tests/ascent.test.ts'], 60_000);
     await run(process.execPath, ['--test', 'tests/release.test.ts'], 15_000);
     await run(process.execPath, ['--test', 'tests/package.test.ts'], 30_000);
     const project = join(root, 'tests', 'Klanker.Smoke');

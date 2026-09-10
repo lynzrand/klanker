@@ -159,6 +159,49 @@ internal static class ViewTests
         Reject(() => context.Vessel.Parts.ById("999"), "unknown part id");
         context.End();
 
+        // Ascent telemetry: atmosphere, acceleration, thrust aggregation, and the
+        // staging signals an autopilot reads (flameout, per-engine propellant).
+        vessel.mainBody.atmosphere = true;
+        vessel.mainBody.atmosphereDepth = 70000;
+        vessel.staticPressurekPa = 30.5; vessel.dynamicPressurekPa = 18.25;
+        vessel.atmDensity = 0.9; vessel.mach = 1.2; vessel.geeForce = 2.5;
+        vessel.currentStage = 3;
+        tank.fuelCrossFeed = true;
+        second.Modules.Add(new ModuleDecouple());
+        engine.flameout = true; engine.realIsp = 345; engine.currentThrottle = 0.5f;
+        engine.getIgnitionState = true; engine.isOperational = true; engine.thrustPercentage = 100;
+        engine.finalThrust = 12;
+        engine.propellants.Add(new Propellant { totalResourceAvailable = 40, totalResourceCapacity = 100 });
+        context.Begin(vessel, controls);
+        var view = context.Vessel;
+        Check(view.StaticPressure == 30.5 && view.DynamicPressure == 18.25 && view.AtmosphericDensity == 0.9 &&
+            view.Mach == 1.2 && view.GeeForce == 2.5 && view.CurrentStage == 3, "atmosphere/acceleration telemetry");
+        Check(view.Body.HasAtmosphere && view.Body.AtmosphereDepth == 70000, "body atmosphere");
+        Check(view.Velocity.LocalOrbital.X == 3 && view.Velocity.LocalOrbital.Y == 4, "local orbital velocity");
+        Check(view.CurrentThrust == 12 && view.AvailableThrust == 60, "thrust aggregates");
+        Check(view.EngineCount == 1 && view.FlameoutEngines == 1, "engine counts");
+        var live = view.Parts.ById("202").Engines.Get(0);
+        Check(live.Flameout && live.Isp == 345 && live.CurrentThrottle == 0.5 && live.VacuumThrust == 60,
+            "engine burn telemetry");
+        Check(live.PropellantAvailable == 40 && live.PropellantCapacity == 100, "crossfeed propellant");
+        Check(view.Parts.ById("101").Crossfeed && !view.Parts.ById("101").Decoupler &&
+            view.Parts.ById("202").Decoupler, "crossfeed and decoupler flags");
+        context.End();
+        using (var worker = new FlightWorker("""
+            export default { flightTick({vessel}) {
+                const assert = (ok, message) => { if (!ok) throw new Error(message); };
+                assert(vessel.dynamicPressure === 18.25 && vessel.body.hasAtmosphere, 'atmosphere');
+                assert(vessel.currentStage === 3 && vessel.availableThrust === 60, 'thrust and staging');
+                const engine = vessel.parts.byId('202').engines.get(0);
+                assert(engine.flameout === true && engine.propellantAvailable === 40, 'engine staging signals');
+                assert(vessel.parts.byId('202').decoupler === true, 'decoupler flag');
+            }};
+            """))
+        {
+            worker.Tick(vessel, controls);
+        }
+        Check(true, "JS ascent telemetry marshals");
+
         // Exercise the parts API through real V8 to confirm arrays and nested
         // views marshal correctly.
         using (var worker = new FlightWorker("""

@@ -48,9 +48,14 @@ internal static class RuntimeTests
             budgeted.Tick(vessel, controls);
             Check(controls.mainThrottle == 0.5f, "first tick permits host setup beyond steady-state budget");
             Check(budgeted.SnapshotStorage() == "{}", "storage snapshot between flight ticks");
+            // An isolated over-budget tick is tolerated (it can be a GC or OS
+            // stall); a second consecutive one faults and must not commit.
             controls.mainThrottle = 0.1f;
-            Reject(() => budgeted.Tick(vessel, controls), "steady-state budget restored after storage snapshot");
-            Check(controls.mainThrottle == 0.1f, "over-budget host call cannot commit controls");
+            budgeted.Tick(vessel, controls);
+            Check(controls.mainThrottle == 0.5f, "isolated over-budget tick is tolerated");
+            controls.mainThrottle = 0.1f;
+            Reject(() => budgeted.Tick(vessel, controls), "consecutive over-budget ticks fault");
+            Check(controls.mainThrottle == 0.1f, "over-budget tick cannot commit controls");
         }
         host.Dispose();
         Check(second.IsDisposed && fresh.IsDisposed && host.ContextCount == 0, "owner disposes remaining contexts");
