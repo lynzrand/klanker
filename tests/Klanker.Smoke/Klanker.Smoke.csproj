@@ -8,6 +8,7 @@
     <Compile Include="../../src/Klanker/Runtime/FlightWorker.cs" Link="FlightWorker.cs" />
     <Compile Include="../../src/Klanker/Runtime/WorkerRuntime.cs" Link="WorkerRuntime.cs" />
     <Compile Include="../../src/Klanker/Runtime/VesselView.cs" Link="VesselView.cs" />
+    <Compile Include="../../src/Klanker/Runtime/PartsView.cs" Link="PartsView.cs" />
     <Compile Include="../../src/Klanker/Runtime/ComputerProgram.cs" Link="ComputerProgram.cs" />
     <Compile Include="../../src/Klanker/Runtime/ComputerWorker.cs" Link="ComputerWorker.cs" />
     <Compile Include="../../src/Klanker/KlankerComputer.cs" Link="KlankerComputer.cs" />

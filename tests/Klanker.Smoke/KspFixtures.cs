@@ -57,6 +57,8 @@ public class PartModule : UnityEngine.MonoBehaviour
     public enum StartState { Editor, Flying }
     public Part part = new();
     public Vessel? vessel => part.vessel;
+    public string moduleName = "";
+    public string ClassName => GetType().Name;
     public bool isEnabled = true, moduleIsEnabled = true;
     public virtual string GetInfo() => "";
     public virtual void OnStart(StartState state) { }
@@ -64,6 +66,15 @@ public class PartModule : UnityEngine.MonoBehaviour
     public virtual void OnSave(ConfigNode node) { }
     public virtual void OnCopy(PartModule source) { }
 }
+public class ModuleEngines : PartModule
+{
+    public string engineName = "Engine";
+    public float maxThrust = 200, minThrust, finalThrust, resultingThrust, thrustPercentage = 100;
+    public bool getIgnitionState, isOperational = true;
+    public void Activate() => getIgnitionState = true;
+    public void Shutdown() => getIgnitionState = false;
+}
+public sealed class ModuleNameTag : PartModule { public string nameTag = ""; }
 public sealed class ConfigNode
 {
     private readonly Dictionary<string, string> values = new();
@@ -75,11 +86,14 @@ public sealed class ConfigNode
         foreach (var pair in values) if (overwrite || node.GetValue(pair.Key) == null) node.SetValue(pair.Key, pair.Value, true);
     }
 }
-public sealed class AvailablePart { public string title = "Test pod"; }
+public sealed class AvailablePart { public string name = "testpart"; public string title = "Test pod"; }
 public sealed class Part
 {
     public UnityEngine.Rigidbody rb = new();
     public List<PartResource> Resources = new();
+    public List<PartModule> Modules = new();
+    public uint persistentId;
+    public int inverseStage;
     public Vessel? vessel;
     public AvailablePart partInfo = new();
     public KlankerComputer? Computer;

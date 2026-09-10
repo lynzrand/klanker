@@ -10,6 +10,7 @@ internal sealed class TickBinding
     private Vessel? vessel;
     private FlightCtrlState? controls;
     private readonly List<Action> pendingActions = new();
+    private readonly Dictionary<ModuleEngines, double> pendingLimiters = new();
     internal Vessel Vessel => vessel ?? throw new InvalidOperationException("Vessel access requires flightTick.");
     internal FlightCtrlState Controls => controls ?? throw new InvalidOperationException("Control access requires flightTick.");
     internal void Bind(Vessel activeVessel, FlightCtrlState activeControls)
@@ -27,12 +28,23 @@ internal sealed class TickBinding
         _ = Vessel;
         pendingActions.Add(action);
     }
+    // Buffered module writes (e.g. thrust limiter) are applied on commit and are
+    // visible to reads within the same tick, unlike queued discrete actions.
+    internal double? GetPendingLimiter(ModuleEngines engine) =>
+        pendingLimiters.TryGetValue(engine, out var value) ? value : null;
+    internal void SetPendingLimiter(ModuleEngines engine, double fraction)
+    {
+        _ = Vessel;
+        pendingLimiters[engine] = fraction;
+    }
     internal void RunActions()
     {
+        foreach (var pair in pendingLimiters) pair.Key.thrustPercentage = (float)(pair.Value * 100.0);
+        pendingLimiters.Clear();
         foreach (var action in pendingActions) action();
         pendingActions.Clear();
     }
-    internal void Clear() { vessel = null; controls = null; pendingActions.Clear(); }
+    internal void Clear() { vessel = null; controls = null; pendingActions.Clear(); pendingLimiters.Clear(); }
 }
 
 public sealed class FlightContext
@@ -68,6 +80,7 @@ public sealed class VesselView
         Body = new BodyView(binding);
         Velocity = new VelocityView(binding);
         Resources = new ResourcesView(binding);
+        Parts = new PartsView(binding);
         Control = new ControlView(binding);
         Attitude = new AttitudeView(binding);
     }
@@ -88,6 +101,7 @@ public sealed class VesselView
     [ScriptMember("body")] public BodyView Body { get; }
     [ScriptMember("velocity")] public VelocityView Velocity { get; }
     [ScriptMember("resources")] public ResourcesView Resources { get; }
+    [ScriptMember("parts")] public PartsView Parts { get; }
     [ScriptMember("control")] public ControlView Control { get; }
     [ScriptMember("attitude")] public AttitudeView Attitude { get; }
     // Queued, not buffered: the next stage fires only after a successful tick.

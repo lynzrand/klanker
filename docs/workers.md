@@ -52,6 +52,33 @@ the current tick's vessel. Reads outside a tick fail.
 locked tanks; it does not predict engine accessibility or crossfeed. Missing
 resources return zero totals. Resource quantities use KSP resource units.
 
+## Parts
+
+`vessel.parts` queries the current vessel's parts. Results are count/get views,
+not JavaScript arrays, because host arrays cannot be iterated under Klanker's
+restricted access model:
+
+~~~js
+const main = vessel.parts.byTag('main-engine');
+for (let i = 0; i < main.count; i++) {
+    const part = main.get(i);
+    console.log(part.title, part.engines.count);
+}
+~~~
+
+`parts.count`, `parts.get(i)`, `parts.byName(name)` (part config name),
+`parts.byTag(tag)` (name tags from `ModuleNameTag` or `KOSNameTag`, if
+installed), and `parts.withModule(name)` are available; `parts.byId(id)`
+resolves a stable `part.id` (KSP `persistentId`) and throws if the part is gone.
+References are live for the current tick only: store `part.id` in `ctx.storage`
+and re-query with `parts.byId` to follow a part across ticks, staging, or
+docking.
+
+A part exposes `id`, `name`, `title`, `stage`, `tags`, `resources.get(name)`
+(single-part totals), and `engines` (`count`/`get(i)`). Each engine exposes
+`name`, `maxThrust`, `thrust`, `ignited`, `operational`, a buffered
+`thrustLimiter` (0..1), and queued `activate()`/`shutdown()` actions.
+
 Both velocity vectors use KSP's current Unity world axes, not vessel-local axes
 or north/east/up. Don't treat these axes as a persistent inertial frame.
 Unavailable orbital values can be nonfinite; period and time to apoapsis are

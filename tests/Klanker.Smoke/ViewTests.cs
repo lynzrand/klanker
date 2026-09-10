@@ -15,7 +15,9 @@ internal static class ViewTests
         definitions = Regex.Replace(definitions, @"/\*[\s\S]*?\*/|//[^\r\n]*", "");
         foreach (var type in new[] { typeof(FlightContext), typeof(VesselView), typeof(OrbitView),
             typeof(BodyView), typeof(VelocityView), typeof(VectorView), typeof(ResourcesView),
-            typeof(ResourceTotals), typeof(ControlView), typeof(TranslationView), typeof(AttitudeView), typeof(LocalVectorView) })
+            typeof(ResourceTotals), typeof(ControlView), typeof(TranslationView), typeof(AttitudeView),
+            typeof(LocalVectorView), typeof(PartsView), typeof(PartList), typeof(PartRef),
+            typeof(PartResourcesView), typeof(EnginesView), typeof(EngineView) })
         {
             var match = Regex.Match(definitions, @"interface\s+" + type.Name + @"\s*\{([^}]+)\}");
             Check(match.Success, "packaged declaration " + type.Name);
@@ -46,9 +48,17 @@ internal static class ViewTests
             controls.pitch == 0 && controls.yaw == 0 && controls.roll == 0, "packaged hopper executes against real ClearScript views");
     }
 
-    private static string TypeName(Type type) => type == typeof(double) ? "number" :
-        type == typeof(bool) ? "boolean" : type == typeof(string) ? "string" :
-        type == typeof(ScriptObject) ? "Storage" : type == typeof(void) ? "void" : type.Name;
+    private static string TypeName(Type type)
+    {
+        if (type.IsArray) return TypeName(type.GetElementType()!) + "[]";
+        if (type == typeof(double) || type == typeof(float) || type == typeof(int) ||
+            type == typeof(uint) || type == typeof(long) || type == typeof(short) || type == typeof(byte)) return "number";
+        if (type == typeof(bool)) return "boolean";
+        if (type == typeof(string)) return "string";
+        if (type == typeof(ScriptObject)) return "Storage";
+        if (type == typeof(void)) return "void";
+        return type.Name;
+    }
 
     internal static void Run()
     {
@@ -113,6 +123,61 @@ internal static class ViewTests
             Reject(() => worker.Tick(vessel, controls), "staging tick fault");
             Check(stageManager.Activations == 0, "staging action is discarded when the tick fails");
         }
+
+        // Parts API: queries, stable ids, per-part resources, engines, limiter commit.
+        tank.persistentId = 101; second.persistentId = 202;
+        tank.partInfo.name = second.partInfo.name = "fuelTank";
+        tank.partInfo.title = "Fuel Tank";
+        tank.Modules.Add(new ModuleNameTag { nameTag = "core main" });
+        var engine = new ModuleEngines { engineName = "LV-909", maxThrust = 60, finalThrust = 12 };
+        second.Modules.Add(engine);
+        context.Begin(vessel, controls);
+        var parts = context.Vessel.Parts;
+        Check(parts.Count == 2 && parts.Get(0).Id == "101", "parts count/get");
+        Check(parts.ByName("fuelTank").Count == 2 && parts.ById("202").Title == "Test pod", "parts byName/byId");
+        Check(parts.ByTag("main").Count == 1 && parts.ByTag("core").Count == 1 && parts.ByTag("nope").Count == 0, "parts byTag tokens");
+        Check(parts.WithModule("ModuleEngines").Count == 1 && parts.WithModule("Nope").Count == 0, "parts withModule");
+        var engines = parts.ById("202").Engines;
+        Check(engines.Count == 1 && engines.Get(0).Name == "LV-909" && engines.Get(0).Thrust == 12 && !engines.Get(0).Ignited,
+            "engine reads");
+        var partEngine = engines.Get(0);
+        Check(partEngine.ThrustLimiter == 1, "engine limiter live read");
+        partEngine.ThrustLimiter = 0.5;
+        Check(partEngine.ThrustLimiter == 0.5, "engine limiter read-after-write");
+        Reject(() => partEngine.ThrustLimiter = 1.5, "engine limiter range");
+        partEngine.Activate();
+        Check(!engine.getIgnitionState, "engine activate is queued, not immediate");
+        context.Commit(); context.End();
+        Check(engine.thrustPercentage == 50 && engine.getIgnitionState, "engine limiter and activate commit");
+        context.Begin(vessel, controls);
+        partEngine.ThrustLimiter = 0.25;
+        context.End();
+        Check(engine.thrustPercentage == 50, "engine limiter discarded when no commit");
+        context.Begin(vessel, controls);
+        Check(context.Vessel.Parts.ById("101").Resources.Get("ElectricCharge").Amount == 12, "per-part resource totals");
+        Reject(() => context.Vessel.Parts.ById("999"), "unknown part id");
+        context.End();
+
+        // Exercise the parts API through real V8 to confirm arrays and nested
+        // views marshal correctly.
+        using (var worker = new FlightWorker("""
+            export default { flightTick({vessel}) {
+                const assert = (ok, message) => { if (!ok) throw new Error(message); };
+                assert(vessel.parts.count === 2 && vessel.parts.get(0).id === '101', 'parts count/get');
+                assert(vessel.parts.byName('fuelTank').count === 2, 'parts.byName');
+                assert(vessel.parts.byTag('main').count === 1, 'parts.byTag');
+                assert(vessel.parts.withModule('ModuleEngines').count === 1, 'parts.withModule');
+                const engine = vessel.parts.byId('202').engines.get(0);
+                assert(engine.name === 'LV-909' && engine.thrust === 12, 'engine reads');
+                assert(vessel.parts.byId('202').resources.get('ElectricCharge').amount === 3, 'part resources');
+                engine.thrustLimiter = 0.4;
+                assert(engine.thrustLimiter === 0.4, 'limiter read-after-write');
+            }};
+            """))
+        {
+            worker.Tick(vessel, controls);
+        }
+        Check(engine.thrustPercentage == 40, "JS parts API and limiter commit");
 
         var logs = new List<string>();
         using (var worker = new FlightWorker("""

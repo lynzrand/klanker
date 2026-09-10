@@ -51,6 +51,7 @@ declare namespace Klanker {
         readonly body: BodyView;
         readonly velocity: VelocityView;
         readonly resources: ResourcesView;
+        readonly parts: PartsView;
         /** The only writable vessel properties. */
         readonly control: ControlView;
         readonly attitude: AttitudeView;
@@ -144,6 +145,73 @@ declare namespace Klanker {
         readonly amount: number;
         /** Resource units. */
         readonly capacity: number;
+    }
+
+    /**
+     * Live queries over the current vessel's parts. References are valid for the
+     * tick that produced them; persist `part.id` and re-query with `byId` to
+     * follow a part across ticks, staging, docking, or save/load.
+     */
+    interface PartsView {
+        readonly count: number;
+        /** Index into the live part list; throws if out of range. */
+        get(index: number): PartRef;
+        /** Matches the part config name (AvailablePart.name), not the title. */
+        byName(name: string): PartList;
+        /** Matches a name tag from ModuleNameTag or KOSNameTag, if installed. */
+        byTag(tag: string): PartList;
+        /** Matches a PartModule ClassName or moduleName. */
+        withModule(module: string): PartList;
+        /** Resolves a persistentId; throws if no part on the vessel has it. */
+        byId(id: string): PartRef;
+    }
+
+    interface PartList {
+        readonly count: number;
+        get(index: number): PartRef;
+    }
+
+    interface PartRef {
+        /** Stable KSP persistentId as a string. */
+        readonly id: string;
+        /** Part config name. */
+        readonly name: string;
+        /** Display title. */
+        readonly title: string;
+        /** KSP inverseStage; lower numbers fire earlier. */
+        readonly stage: number;
+        /** Name tags from ModuleNameTag or KOSNameTag, de-duplicated. */
+        readonly tags: string[];
+        readonly resources: PartResourcesView;
+        readonly engines: EnginesView;
+    }
+
+    /** Totals over a single part, matching vessel.resources.get semantics. */
+    interface PartResourcesView {
+        get(name: string): ResourceTotals;
+    }
+
+    interface EnginesView {
+        readonly count: number;
+        get(index: number): EngineView;
+    }
+
+    interface EngineView {
+        readonly name: string;
+        /** Kilonewtons, the engine's configured maximum. */
+        readonly maxThrust: number;
+        /** Kilonewtons currently produced. */
+        readonly thrust: number;
+        readonly ignited: boolean;
+        readonly operational: boolean;
+        /**
+         * 0..1 thrust limiter. Buffered: reads see the pending value, and a
+         * failed tick leaves the engine unchanged.
+         */
+        thrustLimiter: number;
+        /** Queued discrete actions, run only after a successful tick. */
+        activate(): void;
+        shutdown(): void;
     }
 
     interface ControlView {
