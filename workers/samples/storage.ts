@@ -1,8 +1,6 @@
-// @ts-check
-/// <reference path="./klanker.d.ts" />
 // Read-only flight example: quicksave, run a while, then quickload or reload this file.
 let reported = false;
-/** @satisfies {Klanker.Worker} */
+
 export default {
     flightTick({ storage, deltaTime }) {
         const ticks = typeof storage.ticks === 'number' ? storage.ticks : 0;
@@ -14,4 +12,4 @@ export default {
         storage.ticks = ticks + 1;
         storage.flightSeconds = seconds + deltaTime;
     },
-};
+} satisfies Klanker.Worker;

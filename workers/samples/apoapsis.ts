@@ -4,4 +4,4 @@ export default {
     flightTick({ vessel }) {
         vessel.control.throttle = vessel.orbit.apoapsis < 100_000 ? 1 : 0;
     },
-};
+} satisfies Klanker.Worker;

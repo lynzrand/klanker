@@ -26,10 +26,11 @@ import frame from 'klanker/frame';
 
 The files ship as TypeScript, so your bundler (or `pnpm klanker`) compiles them;
 there is no separate runtime build. Imports also work through the original
-`klanker:<name>` scheme. The libraries are not shipped in `GameData`, and the
-runtime does not need a module loader. The in-game **Assign / reload file** path
-does not bundle, so files assigned there must be self-contained JavaScript (the
-shipped examples are).
+`klanker:<name>` scheme. The `Klanker.Worker` host API declaration ships here
+too, as `klanker/api`. The libraries are not loaded at runtime by the game, and
+it does not need a module loader. The in-game **Assign / reload file** path does
+not bundle, so files assigned there must be self-contained JavaScript; the
+shipped examples are bundled into `GameData/Klanker/Workers` at build time.
 
 ## klanker:vec
 

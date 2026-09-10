@@ -1,5 +1,3 @@
-// @ts-check
-/// <reference path="./klanker.d.ts" />
 // Experimental low-altitude hopper. Read docs/grasshopper.md before flying.
 // Upright liquid rocket, landing legs down, SAS OFF, no other autopilot.
 // Start on the ground; activate the engine/release clamps manually.
@@ -29,28 +27,32 @@ let verticalIntegral = 0;
 let vesselId = '', bodyName = '';
 const radians = Math.PI / 180;
 
-/** @param {number} value @param {number} low @param {number} high */
-const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
-/** @param {{x:number,y:number,z:number}} a @param {{x:number,y:number,z:number}} b */
-const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+const clamp = (value: number, low: number, high: number): number => Math.max(low, Math.min(high, value));
+const dot = (a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }): number =>
+    a.x * b.x + a.y * b.y + a.z * b.z;
 
-// Self-contained because saved workers currently contain a single JS module.
-// Derivative on measurement avoids setpoint kick. Integral is in output units.
+// Deliberately standalone, so the file also works when assigned directly in the
+// in-game window without bundling. Derivative on measurement avoids setpoint
+// kick; the integral is in output units.
 class PID {
-    /** @param {number} kp @param {number} ki @param {number} kd */
-    constructor(kp, ki, kd) {
+    kp: number;
+    ki: number;
+    kd: number;
+    integral: number;
+    derivative: number;
+    previous: number | null;
+    output: number;
+
+    constructor(kp: number, ki: number, kd: number) {
         this.kp = kp; this.ki = ki; this.kd = kd;
         this.integral = 0; this.derivative = 0;
-        /** @type {number | null} */
         this.previous = null;
         this.output = 0;
     }
-    reset() {
+    reset(): void {
         this.integral = 0; this.derivative = 0; this.previous = null; this.output = 0;
     }
-    /** @param {number} target @param {number} measurement @param {number} dt
-     * @param {number} limit @param {number} deadband */
-    update(target, measurement, dt, limit, deadband = 0) {
+    update(target: number, measurement: number, dt: number, limit: number, deadband = 0): number {
         const rawDerivative = this.previous === null ? 0 : (measurement - this.previous) / dt;
         this.previous = measurement;
         this.derivative += dt / (0.35 + dt) * (rawDerivative - this.derivative);
@@ -64,24 +66,21 @@ class PID {
         this.output = clamp(base + this.integral, -limit, limit);
         return this.output;
     }
-    /** Back-calculation for the shared two-axis acceleration/tilt limit.
-     * @param {number} applied @param {number} dt */
-    track(applied, dt) {
+    /** Back-calculation for the shared two-axis acceleration/tilt limit. */
+    track(applied: number, dt: number): void {
         this.integral = clamp(this.integral + (applied - this.output) * Math.min(1, dt), -0.2, 0.2);
     }
 }
 const northPID = new PID(config.horizontalKp, config.horizontalKi, config.horizontalKd);
 const eastPID = new PID(config.horizontalKp, config.horizontalKi, config.horizontalKd);
 
-/** @param {string} next */
-function transition(next) {
+function transition(next: string): void {
     phase = next;
     stableFor = 0;
     northPID.reset(); eastPID.reset();
     console.log('Grasshopper:', next);
 }
 
-/** @satisfies {Klanker.Worker} */
 export default {
     flightTick({ vessel, universalTime: now, deltaTime: dt }) {
         const up = vessel.attitude.up;
@@ -197,4 +196,4 @@ export default {
         vessel.control.roll = clamp(config.dampingGain * omega.y, -limit, limit);
         vessel.control.throttle = clamp(requestedThrottle, 0, 1);
     },
-};
+} satisfies Klanker.Worker;

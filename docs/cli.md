@@ -1,9 +1,10 @@
 # Klanker CLI
 
 The CLI deploys and controls workers on a running game through a loopback-only
-bridge. It is the intended authoring path: `GameData/Klanker/Workers` is only for
-samples and the shipped `klanker.d.ts`, not a runtime requirement. The in-game
-window remains the fallback and is still how you set aliases without the CLI.
+bridge. It is the intended authoring path: worker sources live in
+[`workers/`](../workers), and `GameData/Klanker/Workers` is generated at build
+time for the in-game window, not a runtime requirement. The in-game window
+remains the fallback and is still how you set aliases without the CLI.
 
 ## Setup
 

@@ -90,11 +90,13 @@ From the CLI instead:
 
 ```sh
 pnpm klanker ls                                  # what's flying
-pnpm klanker deploy my-ascent.ts --to guidance --run
+pnpm klanker deploy workers/samples/observe.ts --to guidance --run
 pnpm klanker logs -f --to guidance
 ```
 
-See the [worker guide](docs/workers.md) for the API, [standard
+The example sources live in [`workers/samples/`](workers); `pnpm make build`
+bundles them into the game folder for the in-game window. See the
+[worker guide](docs/workers.md) for the API, [standard
 library](docs/libraries.md) for the modules, and the [CLI guide](docs/cli.md) for
 the full command list.
 
@@ -104,10 +106,12 @@ Klanker ships two npm packages:
 
 - **`klanker`** — the worker standard library. Import `klanker`, `klanker/pid`,
   `klanker/frame`, and friends from any TypeScript project; the sources are
-  TypeScript, so your editor and bundler handle them directly.
+  TypeScript, so your editor and bundler handle them directly. The
+  `Klanker.Worker` host API declaration ships here too (`klanker/api`).
 - **`klanker-cli`** — the `klanker` command that bundles and deploys workers.
 
-Inside this repository, `pnpm klanker` runs the CLI from source.
+Inside this repository, `pnpm klanker` runs the CLI from source, and worker
+sources live in [`workers/`](workers).
 
 ## Project status
 

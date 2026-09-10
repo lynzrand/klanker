@@ -20,7 +20,9 @@ pnpm build:js                           # Build the cli/dist package output
 
 The CLI and the worker standard library are separate npm packages: `klanker-cli`
 (the `klanker` bin) and `klanker` (the importable `lib/` modules). Both live in
-this workspace; the root package is private build tooling.
+this workspace; the root package is private build tooling. The build also bundles
+`workers/samples/*.ts` and copies the host API declaration into
+`GameData/Klanker/Workers`, which is what the in-game assignment window reads.
 
 `pnpm make` defaults to a Debug build. `bootstrap` fetches the KSP and MechJeb
 definitions; `compile` builds the plugin; `build` adds runtime dependencies and
@@ -40,8 +42,8 @@ pnpm make deploy --configuration Release --ksp "another/path/to/KSP"
 ```
 
 Close KSP first. Deployment replaces Klanker's `Plugins`, `Licenses`, `Patches`,
-and the shipped `Workers/klanker.d.ts` API definition, and preserves
-existing worker edits and other local data, and adds any new example workers.
+and the generated `Workers` (the `klanker.d.ts` API definition and the bundled
+example `.js` files). It preserves existing worker edits and other local data.
 It does not install MechJeb or change other mods. Symlink and junction deployment
 layouts are rejected.
 

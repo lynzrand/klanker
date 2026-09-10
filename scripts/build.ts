@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 
 import { kspRoot } from './bootstrap.ts';
 import { copyMonoRuntime } from './mono-runtime.ts';
+import { buildWorkers } from './workers.ts';
 
 export async function compile(configuration: string): Promise<void> {
     if (!configuration || !['Debug', 'Release'].includes(configuration)) {
@@ -57,6 +58,7 @@ interface ProjectAssets {
 
 export async function copyClearScriptNativeLibraries(buildConfiguration: string): Promise<void> {
     await cp(join(import.meta.dirname, '..', 'GameData'), join(import.meta.dirname, '..', 'build', 'GameData'), { recursive: true });
+    await buildWorkers(join(import.meta.dirname, '..', 'build', 'GameData', 'Klanker', 'Workers'));
     const projectDirectory = join(import.meta.dirname, '..', 'src', 'Klanker');
     const assets = JSON.parse(await readFile(join(projectDirectory, 'obj', 'project.assets.json'), 'utf8')) as ProjectAssets;
     const packageRoots = Object.keys(assets.packageFolders);

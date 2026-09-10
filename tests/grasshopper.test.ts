@@ -2,8 +2,12 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import vm from 'node:vm';
+import { transpileWorker } from '../cli/bundle.ts';
 
-const source = await readFile(new URL('../GameData/Klanker/Workers/grasshopper.js', import.meta.url), 'utf8');
+// Rewrite the default export before stripping types: esbuild would otherwise
+// hoist it and rename the module's top-level bindings out of the test's reach.
+const source = await readFile(new URL('../workers/samples/grasshopper.ts', import.meta.url), 'utf8');
+const compiled = await transpileWorker(source.replace('export default', 'globalThis.worker ='));
 
 interface Loaded {
     worker: any;
@@ -17,7 +21,7 @@ interface Loaded {
 function load(): Loaded {
     const logs: string[] = [];
     const sandbox: any = { console: { log: (...args: unknown[]) => logs.push(args.join(' ')) } };
-    vm.runInNewContext(source.replace('export default', 'globalThis.worker =') +
+    vm.runInNewContext(compiled +
         '\n globalThis.PID = PID; globalThis.state = () => phase; globalThis.setPhase = transition; globalThis.horizontal = [northPID, eastPID];', sandbox);
     return { worker: sandbox.worker, logs, PID: sandbox.PID, state: sandbox.state,
         setPhase: sandbox.setPhase, horizontal: sandbox.horizontal };

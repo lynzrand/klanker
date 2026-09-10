@@ -14,8 +14,9 @@ export default {
 Deploy it with `pnpm klanker deploy <file> --to <alias>` (see the
 [CLI](cli.md)); the CLI bundles imports into one self-contained module and
 includes the built-in [worker libraries](libraries.md). Files assigned from the
-in-game window are embedded as-is and must be self-contained.
-`GameData/Klanker/Workers` holds the examples and the shipped `klanker.d.ts`.
+in-game window are embedded as-is and must be self-contained. Worker sources
+live in [`workers/`](../workers); the build bundles the examples into
+`GameData/Klanker/Workers` for the in-game window.
 
 Klanker calls this handler through KSP's flight-control callback on the active,
 unpacked vessel. It does not invoke the worker while the pause menu is open.
@@ -27,8 +28,11 @@ reference part without a computer grants no worker flight authority. See the
 ## Available properties
 
 The full interface, including units and edge cases, is in
-[`klanker.d.ts`](../GameData/Klanker/Workers/klanker.d.ts). It ships beside the
-example workers. Add these lines to a script for editor completion and checking:
+[`klanker.d.ts`](../lib/klanker.d.ts), which ships with the `klanker` standard
+library package and is generated beside the in-game examples. TypeScript
+workers get it directly: `import { PID } from 'klanker'` plus the global
+`Klanker.Worker` type. For a plain JavaScript file in
+`GameData/Klanker/Workers`, add these lines for editor completion and checking:
 
 ~~~js
 // @ts-check

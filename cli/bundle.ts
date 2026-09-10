@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { build, type OnResolveArgs, type OnResolveResult, type Plugin } from 'esbuild';
+import { build, transform, type OnResolveArgs, type OnResolveResult, type Plugin } from 'esbuild';
 import { libRoot } from './package-paths.ts';
 
 export { libRoot } from './package-paths.ts';
@@ -64,6 +64,15 @@ async function bundle(entryPath: string): Promise<string> {
 
 /** Bundle a worker entry (TypeScript or JavaScript, plus its imports) into one ESM string. */
 export const bundleWorker = (entryPath: string): Promise<string> => bundle(resolve(entryPath));
+
+/**
+ * Strip types from a single self-contained module without bundling or renaming
+ * anything. Useful for tools that need to read a worker's top-level names.
+ */
+export async function transpileWorker(source: string, loader: 'ts' | 'js' = 'ts'): Promise<string> {
+    const result = await transform(source, { loader, format: 'esm', target: 'es2020' });
+    return result.code;
+}
 
 /** Bundle a built-in library by short name, e.g. bundleModule('vec'). */
 export function bundleModule(name: string): Promise<string> {

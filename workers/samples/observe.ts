@@ -1,8 +1,6 @@
-// @ts-check
-/// <reference path="./klanker.d.ts" />
 // A first-load smoke test: reads live telemetry without changing controls.
 let reported = false;
-/** @satisfies {Klanker.Worker} */
+
 export default {
     flightTick({ vessel }) {
         if (!Number.isFinite(vessel.altitude)) throw new Error('Invalid altitude');
@@ -17,4 +15,4 @@ export default {
             reported = true;
         }
     },
-};
+} satisfies Klanker.Worker;

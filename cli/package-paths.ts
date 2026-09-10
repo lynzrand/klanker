@@ -31,15 +31,11 @@ export function stdlibRoot(): string {
 export const libRoot = stdlibRoot();
 
 /**
- * The host API declaration used to type-check workers. It lives in GameData
- * while developing and is copied into dist/api when the CLI is built.
+ * The host API declaration used to type-check workers. It ships with the
+ * `klanker` standard library package, next to the modules it describes.
  */
 export function hostTypes(): string {
-    const root = packageRoot();
-    const candidates = [
-        join(root, 'dist', 'api', 'klanker.d.ts'),
-        join(root, '..', 'GameData', 'Klanker', 'Workers', 'klanker.d.ts'),
-    ];
-    for (const candidate of candidates) if (existsSync(candidate)) return candidate;
-    return candidates[0];
+    const declaration = join(libRoot, 'klanker.d.ts');
+    if (!existsSync(declaration)) throw new Error(`The klanker host API declaration is missing: ${declaration}`);
+    return declaration;
 }

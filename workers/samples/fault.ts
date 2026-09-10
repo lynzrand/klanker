@@ -4,4 +4,4 @@ export default {
         vessel.control.throttle = 1;
         throw new Error('Intentional rollback test');
     },
-};
+} satisfies Klanker.Worker;

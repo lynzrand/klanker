@@ -22,6 +22,6 @@
         "skipLibCheck": true,
         "noEmit": true
     },
-    "include": ["Herebyfile.ts", "cli/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts"],
+    "include": ["Herebyfile.ts", "cli/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "workers/**/*.ts"],
     "exclude": ["node_modules", "cli/dist", "build", ".cache", ".nuget"]
 }

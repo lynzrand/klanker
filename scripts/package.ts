@@ -39,7 +39,7 @@ export async function snapshotSource(): Promise<SourceSnapshot> {
     const candidates = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean);
     const files: Record<string, Buffer> = {};
     for (const path of [...new Set(candidates)].sort()) {
-        if (!/^(GameData|src|scripts|tests|docs|cli|lib)\//.test(path) &&
+        if (!/^(GameData|src|scripts|tests|docs|cli|lib|workers)\//.test(path) &&
             !['README.md', 'LICENSE', '.gitignore', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
                 'Herebyfile.ts', 'herebyfile.ts', 'tsconfig.json', 'tsconfig.build.json', 'Klanker.sln', 'global.json',
                 'Directory.Build.props', 'Directory.Packages.props', 'NuGet.Config', 'nuget.config',

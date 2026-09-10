@@ -4,9 +4,9 @@ import { snapshotSource, packageRelease } from '../scripts/package.ts';
 
 test('release source snapshot includes build inputs, not local configuration or caches', async () => {
     const snapshot = await snapshotSource();
-    for (const path of ['src/Klanker/Klanker.csproj', 'GameData/Klanker/Workers/grasshopper.js',
+    for (const path of ['src/Klanker/Klanker.csproj', 'workers/samples/grasshopper.ts',
         'scripts/package.ts', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'docs/proposal.md', 'tsconfig.json',
-        'lib/vec.ts', 'lib/frame.ts', 'lib/index.ts', 'lib/package.json',
+        'lib/vec.ts', 'lib/frame.ts', 'lib/index.ts', 'lib/klanker.d.ts', 'lib/package.json',
         'cli/klanker.ts', 'cli/check.ts', 'cli/package.json'])
         assert.ok(snapshot.files[path], path);
     for (const path of Object.keys(snapshot.files))

@@ -4,4 +4,4 @@ export default {
         vessel.control.throttle = 1;
         while (true) {}
     },
-};
+} satisfies Klanker.Worker;

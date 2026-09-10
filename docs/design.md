@@ -34,7 +34,7 @@ store nullable pending values in the control view; successful execution applies
 only values that were written. A shared tick binding is cleared in `finally`,
 along with all pending controls. There is no string-key property dispatcher.
 Only annotated view members are exposed, with reflection and extension methods
-disabled. The script-facing contract lives in `GameData/Klanker/Workers/klanker.d.ts`.
+disabled. The script-facing contract lives in `lib/klanker.d.ts`.
 
 The scene addon owns and warms one ClearScript `V8Runtime`. Worker creation uses
 fresh engine contexts within that runtime, avoiding a new isolate for every
