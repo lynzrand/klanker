@@ -17,7 +17,8 @@ internal static class ViewTests
             typeof(BodyView), typeof(VelocityView), typeof(VectorView), typeof(ResourcesView),
             typeof(ResourceTotals), typeof(ControlView), typeof(TranslationView), typeof(AttitudeView),
             typeof(LocalVectorView), typeof(PartsView), typeof(PartList), typeof(PartRef),
-            typeof(PartResourcesView), typeof(EnginesView), typeof(EngineView) })
+            typeof(PartResourcesView), typeof(EnginesView), typeof(EngineView),
+            typeof(MechJebContext), typeof(MechJebAttitudeView), typeof(MechJebNodeView), typeof(MechJebLandingView) })
         {
             var match = Regex.Match(definitions, @"interface\s+" + type.Name + @"\s*\{([^}]+)\}");
             Check(match.Success, "packaged declaration " + type.Name);
@@ -178,6 +179,27 @@ internal static class ViewTests
             worker.Tick(vessel, controls);
         }
         Check(engine.thrustPercentage == 40, "JS parts API and limiter commit");
+
+        // MechJeb is not loaded in the test host, so the adapter reports absent
+        // and every operation fails explicitly instead of reaching into the mod.
+        context.Begin(vessel, controls);
+        Check(!context.MechJeb.Available, "MechJeb reports absent");
+        Reject(() => context.MechJeb.Attitude.Enabled = true, "MechJeb attitude requires the mod");
+        Reject(() => _ = context.MechJeb.Attitude.Reference, "MechJeb reference read requires the mod");
+        Reject(() => context.MechJeb.Node.Execute(), "MechJeb node requires the mod");
+        Reject(() => context.MechJeb.Landing.Start(), "MechJeb landing requires the mod");
+        context.End();
+        using (var worker = new FlightWorker("""
+            export default { flightTick({mechjeb}) {
+                if (mechjeb.available !== false) throw new Error('expected MechJeb absent');
+                try { mechjeb.node.execute(); throw new Error('expected throw'); }
+                catch (error) { if (String(error).includes('expected throw')) throw error; }
+            }};
+            """))
+        {
+            worker.Tick(vessel, controls);
+        }
+        Check(true, "JS MechJeb availability and guarded failure");
 
         var logs = new List<string>();
         using (var worker = new FlightWorker("""

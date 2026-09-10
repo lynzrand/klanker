@@ -12,6 +12,8 @@ declare namespace Klanker {
 
     interface FlightContext {
         readonly vessel: VesselView;
+        /** Experimental MechJeb bridge; requires MechJeb on the vessel. */
+        readonly mechjeb: MechJebContext;
         /** Per-part state: root cannot be replaced, but its properties can be edited/deleted. */
         readonly storage: Storage;
         /** KSP universal time, simulation seconds. Only readable inside flightTick. */
@@ -212,6 +214,34 @@ declare namespace Klanker {
         /** Queued discrete actions, run only after a successful tick. */
         activate(): void;
         shutdown(): void;
+    }
+
+    /**
+     * Experimental MechJeb bridge. Every member throws when MechJeb is not on the
+     * vessel, so check `available` first. The adapter reaches MechJeb through
+     * reflection, so a new MechJeb release may require adjusting member names.
+     */
+    interface MechJebContext {
+        readonly available: boolean;
+        readonly attitude: MechJebAttitudeView;
+        readonly node: MechJebNodeView;
+        readonly landing: MechJebLandingView;
+    }
+
+    interface MechJebAttitudeView {
+        enabled: boolean;
+        /** An AttitudeReference name, e.g. ORBIT, SURFACE_NORTH, TARGET, MANEUVER_NODE. */
+        reference: string;
+    }
+
+    interface MechJebNodeView {
+        execute(): void;
+        abort(): void;
+    }
+
+    interface MechJebLandingView {
+        start(): void;
+        stop(): void;
     }
 
     interface ControlView {

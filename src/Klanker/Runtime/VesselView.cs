@@ -50,7 +50,11 @@ internal sealed class TickBinding
 public sealed class FlightContext
 {
     private readonly TickBinding binding = new();
-    internal FlightContext() => Vessel = new VesselView(binding);
+    internal FlightContext()
+    {
+        Vessel = new VesselView(binding);
+        MechJeb = new MechJebContext(binding);
+    }
     internal void Begin(Vessel vessel, FlightCtrlState controls)
     {
         binding.Bind(vessel, controls);
@@ -63,6 +67,7 @@ public sealed class FlightContext
     }
     internal void End() { Vessel.Control.Clear(); binding.Clear(); }
     [ScriptMember("vessel")] public VesselView Vessel { get; }
+    [ScriptMember("mechjeb")] public MechJebContext MechJeb { get; }
     private ScriptObject storage = null!;
     internal void BindStorage(ScriptObject value) => storage = value;
     [ScriptMember("storage")] public ScriptObject Storage => storage;

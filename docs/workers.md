@@ -79,6 +79,31 @@ A part exposes `id`, `name`, `title`, `stage`, `tags`, `resources.get(name)`
 `name`, `maxThrust`, `thrust`, `ignited`, `operational`, a buffered
 `thrustLimiter` (0..1), and queued `activate()`/`shutdown()` actions.
 
+## MechJeb (experimental)
+
+`ctx.mechjeb` is a small, experimental bridge to MechJeb when it is present on
+the vessel. Check `mechjeb.available` first; every other member throws when
+MechJeb is absent.
+
+~~~js
+export default {
+    flightTick({ mechjeb }) {
+        if (!mechjeb.available) return;
+        mechjeb.attitude.enabled = true;
+        mechjeb.attitude.reference = 'ORBIT';
+        mechjeb.node.execute();
+    },
+};
+~~~
+
+Available operations: `attitude.enabled`, `attitude.reference` (a MechJeb
+`AttitudeReference` name such as `ORBIT`, `SURFACE_NORTH`, `TARGET`,
+`RELATIVE_VELOCITY`, or `MANEUVER_NODE`), `node.execute()`/`node.abort()`, and
+`landing.start()`/`landing.stop()`. The adapter reaches MechJeb through
+reflection, so a new MechJeb release can rename these members, and it has not
+been validated in game. `attitude.reference` selects a frame only; MechJeb's
+SmartASS also chooses a target direction, so this is a lower-level control.
+
 Both velocity vectors use KSP's current Unity world axes, not vessel-local axes
 or north/east/up. Don't treat these axes as a persistent inertial frame.
 Unavailable orbital values can be nonfinite; period and time to apoapsis are
