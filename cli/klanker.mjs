@@ -5,6 +5,7 @@ import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import { bundleWorker } from './bundle.mjs';
+import { checkWorker } from './check.mjs';
 
 export function discoveryCandidates() {
     const home = homedir();
@@ -123,8 +124,9 @@ function usage() {
 
   ping                         Check the bridge.
   ls                           List onboard actors.
-  build <file>                 Bundle a worker and print it (no game needed).
-  deploy <file> --to <alias>   Bundle and deploy a .js file (--id <workerId> works too).
+  build <file>                 Bundle a worker (.ts or .js) and print it (no game needed).
+  check <file>                 Type-check a worker against the host API and libraries.
+  deploy <file> --to <alias>   Bundle and deploy a worker (--id <workerId> works too).
               [--run]          Start it after deploying.
   restart <alias|workerId>     Restart an actor.
   stop <alias|workerId>        Stop an actor.
@@ -164,8 +166,16 @@ export async function main(argv = process.argv.slice(2)) {
     if (command === 'logs') return streamLogs(flags);
     if (command === 'build') {
         const file = positionals.shift();
-        if (!file) throw new Error('build needs a .js file.');
+        if (!file) throw new Error('build needs a .ts or .js file.');
         process.stdout.write(await bundleWorker(file));
+        return;
+    }
+    if (command === 'check') {
+        const file = positionals.shift();
+        if (!file) throw new Error('check needs a .ts or .js file.');
+        const result = await checkWorker(file);
+        if (result.output) process.stdout.write(result.output);
+        process.exitCode = result.code;
         return;
     }
 
@@ -181,10 +191,10 @@ export async function main(argv = process.argv.slice(2)) {
                 break;
             case 'deploy': {
                 const file = positionals.shift();
-                if (!file) throw new Error('deploy needs a .js file.');
+                if (!file) throw new Error('deploy needs a .ts or .js file.');
                 const result = await client.request('deploy', {
                     target: target(flags),
-                    file: basename(file),
+                    file: basename(file).replace(/\.[^.]+$/, '') + '.js',
                     source: await bundleWorker(file),
                     run: flags.run === true,
                 });

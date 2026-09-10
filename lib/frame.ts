@@ -3,23 +3,36 @@
 // the active control frame (x=right, y=nose, z=belly). These helpers convert
 // between them and build the usual orbital/surface directions.
 // Import as: import frame from 'klanker:frame'.
-import { add, scale, dot, cross, normalize } from './vec.js';
+import { add, cross, dot, normalize, scale, type Vec3 } from './vec';
+
+export interface FrameContext {
+    vessel: {
+        attitude: { east: Vec3; north: Vec3; up: Vec3 };
+        velocity: { orbital: Vec3; surface: Vec3 };
+    };
+}
+
+export interface Basis {
+    east: Vec3;
+    north: Vec3;
+    up: Vec3;
+}
 
 /** Orientation of the control frame as the world east/north/up axes. */
-export const basis = ({ vessel }) => ({
+export const basis = ({ vessel }: FrameContext): Basis => ({
     east: vessel.attitude.east,
     north: vessel.attitude.north,
     up: vessel.attitude.up,
 });
 
 /** Convert a world-axis vector (e.g. velocity.orbital) to control-frame axes. */
-export function toLocal(context, world) {
+export function toLocal(context: FrameContext, world: Vec3): Vec3 {
     const { east, north, up } = basis(context);
     return add(add(scale(east, world.x), scale(north, world.y)), scale(up, world.z));
 }
 
 /** Convert a control-frame vector (e.g. attitude.up) to world axes. */
-export function toWorld(context, local) {
+export function toWorld(context: FrameContext, local: Vec3): Vec3 {
     const { east, north, up } = basis(context);
     return { x: dot(local, east), y: dot(local, north), z: dot(local, up) };
 }
@@ -27,45 +40,45 @@ export function toWorld(context, local) {
 export const localize = toLocal;
 export const globalize = toWorld;
 
-export function prograde(context) {
+export function prograde(context: FrameContext): Vec3 {
     return normalize(context.vessel.velocity.orbital);
 }
-export function retrograde(context) {
+export function retrograde(context: FrameContext): Vec3 {
     return scale(prograde(context), -1);
 }
-export function surfacePrograde(context) {
+export function surfacePrograde(context: FrameContext): Vec3 {
     return normalize(context.vessel.velocity.surface);
 }
-export function surfaceRetrograde(context) {
+export function surfaceRetrograde(context: FrameContext): Vec3 {
     return scale(surfacePrograde(context), -1);
 }
-export function radialOut(context) {
+export function radialOut(context: FrameContext): Vec3 {
     return toWorld(context, context.vessel.attitude.up);
 }
-export function radialIn(context) {
+export function radialIn(context: FrameContext): Vec3 {
     return scale(radialOut(context), -1);
 }
-export function northUp(context) {
+export function northUp(context: FrameContext): Vec3 {
     return toWorld(context, context.vessel.attitude.north);
 }
-export function east(context) {
+export function east(context: FrameContext): Vec3 {
     return toWorld(context, context.vessel.attitude.east);
 }
 /** Orbit normal h = r x v, normalized. */
-export function normal(context) {
+export function normal(context: FrameContext): Vec3 {
     return normalize(cross(radialOut(context), prograde(context)));
 }
-export function antiNormal(context) {
+export function antiNormal(context: FrameContext): Vec3 {
     return scale(normal(context), -1);
 }
 
-export function orbitalBasis(context) {
+export function orbitalBasis(context: FrameContext): { prograde: Vec3; radialOut: Vec3; normal: Vec3 } {
     const p = prograde(context);
     const radial = radialOut(context);
     return { prograde: p, radialOut: radial, normal: normalize(cross(radial, p)) };
 }
 
-export function surfaceBasis(context) {
+export function surfaceBasis(context: FrameContext): { prograde: Vec3; north: Vec3; up: Vec3 } {
     return { prograde: surfacePrograde(context), north: northUp(context), up: radialOut(context) };
 }
 

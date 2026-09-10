@@ -3,6 +3,14 @@
 // Import as: import { PID } from 'klanker:pid'.
 
 export class PID {
+    kp: number;
+    ki: number;
+    kd: number;
+    integral: number;
+    derivative: number;
+    previous: number | null;
+    output: number;
+
     constructor(kp = 0, ki = 0, kd = 0) {
         this.kp = kp;
         this.ki = ki;
@@ -10,7 +18,7 @@ export class PID {
         this.reset();
     }
 
-    reset() {
+    reset(): void {
         this.integral = 0;
         this.derivative = 0;
         this.previous = null;
@@ -18,13 +26,13 @@ export class PID {
     }
 
     /**
-     * @param {number} target
-     * @param {number} measurement
-     * @param {number} dt seconds
-     * @param {number} limit symmetric output limit
-     * @param {number} [deadband]
+     * @param target desired value
+     * @param measurement current value
+     * @param dt seconds
+     * @param limit symmetric output limit
+     * @param deadband error below which no action is taken
      */
-    update(target, measurement, dt, limit, deadband = 0) {
+    update(target: number, measurement: number, dt: number, limit: number, deadband = 0): number {
         const rawDerivative = this.previous === null ? 0 : (measurement - this.previous) / dt;
         this.previous = measurement;
         this.derivative += dt / (0.35 + dt) * (rawDerivative - this.derivative);
@@ -40,10 +48,10 @@ export class PID {
     }
 
     /** Back-calculation for a separately applied (e.g. vector-limited) output. */
-    track(applied, dt) {
+    track(applied: number, dt: number): void {
         this.integral = Math.max(-0.2, Math.min(0.2, this.integral + (applied - this.output) * Math.min(1, dt)));
     }
 }
 
-export const create = (kp, ki, kd) => new PID(kp, ki, kd);
+export const create = (kp: number, ki: number, kd: number): PID => new PID(kp, ki, kd);
 export default { PID, create };

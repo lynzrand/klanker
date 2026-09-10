@@ -1,11 +1,12 @@
-import { build } from 'esbuild';
+import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
-const libRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'lib');
+export const libRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'lib');
 
-// Resolve `klanker:<name>` imports to lib/<name>.js at bundle time, so the
-// runtime still receives one self-contained module saved into the part.
+// Resolve `klanker:<name>` imports to lib/<name>.ts (or .js) at bundle time, so
+// the runtime still receives one self-contained module saved into the part.
 const klankerModules = {
     name: 'klanker-modules',
     setup(pluginBuild) {
@@ -13,16 +14,18 @@ const klankerModules = {
             const name = args.path.slice('klanker:'.length);
             if (!/^[a-z][a-z0-9-]*$/.test(name))
                 return { errors: [{ text: `Invalid Klanker module name: ${args.path}` }] };
-            return { path: resolve(libRoot, `${name}.js`) };
+            for (const extension of ['.ts', '.js']) {
+                const path = resolve(libRoot, `${name}${extension}`);
+                if (existsSync(path)) return { path };
+            }
+            return { errors: [{ text: `Unknown Klanker module: ${args.path}` }] };
         });
     },
 };
 
-/** Bundle a worker entry (and its local/npm/klanker: imports) into one ESM string. */
-export async function bundleWorker(entryPath) {
-    let result;
+async function bundle(entryPath) {
     try {
-        result = await build({
+        const result = await build({
             entryPoints: [entryPath],
             bundle: true,
             write: false,
@@ -32,11 +35,17 @@ export async function bundleWorker(entryPath) {
             plugins: [klankerModules],
             logLevel: 'silent',
         });
+        return result.outputFiles[0].text;
     } catch (error) {
         const detail = error.errors
             ?.map(issue => `${issue.location?.file ?? entryPath}:${issue.location?.line ?? '?'} ${issue.text}`)
             .join('\n') ?? error.message;
         throw new Error(`Bundle failed:\n${detail}`);
     }
-    return result.outputFiles[0].text;
 }
+
+/** Bundle a worker entry (TypeScript or JavaScript, plus its imports) into one ESM string. */
+export const bundleWorker = entryPath => bundle(resolve(entryPath));
+
+/** Bundle a built-in library by short name, e.g. bundleModule('vec'). */
+export const bundleModule = name => bundle(resolve(libRoot, `${name}.ts`));

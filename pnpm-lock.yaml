@@ -17,6 +17,9 @@ importers:
       hereby:
         specifier: 1.15.2
         version: 1.15.2
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
       xz-decompress:
         specifier: 0.2.3
         version: 0.2.3
@@ -192,6 +195,11 @@ packages:
     engines: {node: '>= 12.20'}
     hasBin: true
 
+  typescript@5.9.3:
+    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
   xz-decompress@0.2.3:
     resolution: {integrity: sha512-O8v6HG8T0PrKBcpyWA13GkSYWFvncwzuzcLx5A7++l3HsE3atmoetXjIxrZ/JV/nbvSZ7WS4+3XvREZuVn+rEA==}
     engines: {node: '>=16'}
@@ -308,5 +316,7 @@ snapshots:
   fflate@0.8.2: {}
 
   hereby@1.15.2: {}
+
+  typescript@5.9.3: {}
 
   xz-decompress@0.2.3: {}

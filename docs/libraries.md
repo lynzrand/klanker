@@ -1,22 +1,24 @@
 # Worker libraries
 
 A deployed worker is a single self-contained module, so imports are resolved
-**before** deployment, not at runtime. `pnpm klanker deploy` bundles the entry
-file with [esbuild](https://esbuild.github.io/), inlining local files, npm
-packages, and the built-in `klanker:*` libraries. `pnpm klanker build <file>`
-prints the bundle without contacting the game, which is handy for inspecting or
-hand-installing a worker.
+**before** deployment, not at runtime. Write workers in TypeScript or JavaScript;
+`pnpm klanker deploy` bundles the entry with [esbuild](https://esbuild.github.io/),
+inlining local files, npm packages, and the built-in `klanker:*` libraries.
+`pnpm klanker build <file>` prints the bundle and `pnpm klanker check <file>`
+type-checks it, both without contacting the game.
 
 ```sh
-pnpm install --frozen-lockfile      # once, for esbuild
-pnpm klanker build ascent.js > ascent.bundle.js
-pnpm klanker deploy ascent.js --to guidance --run
+pnpm install --frozen-lockfile      # once, for esbuild and typescript
+pnpm klanker check ascent.ts        # type-check against the API and libraries
+pnpm klanker build ascent.ts > ascent.bundle.js
+pnpm klanker deploy ascent.ts --to guidance --run
 ```
 
-The libraries live under [`lib/`](../lib) in this repo; they are not shipped in
-`GameData`, and the runtime does not need a module loader. The in-game
-**Assign / reload file** path does not bundle, so files assigned there must be
-self-contained (the shipped examples are).
+The libraries under [`lib/`](../lib) are TypeScript sources; type-checking maps
+`klanker:*` onto them. They are not shipped in `GameData`, and the runtime does
+not need a module loader. The in-game **Assign / reload file** path does not
+bundle, so files assigned there must be self-contained JavaScript (the shipped
+examples are).
 
 ## klanker:vec
 

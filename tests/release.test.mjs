@@ -6,7 +6,7 @@ test('release source snapshot includes build inputs, not local configuration or 
     const snapshot = await snapshotSource();
     for (const path of ['src/Klanker/Klanker.csproj', 'GameData/Klanker/Workers/grasshopper.js',
         'scripts/package.mjs', 'pnpm-lock.yaml', 'pnpm-workspace.yaml', 'docs/proposal.md',
-        'lib/vec.js', 'lib/frame.js', 'cli/klanker.mjs'])
+        'lib/vec.ts', 'lib/frame.ts', 'cli/klanker.mjs', 'cli/check.mjs'])
         assert.ok(snapshot.files[path], path);
     for (const path of Object.keys(snapshot.files))
         assert.ok(!/(^|\/)(\.git|\.jj|\.cache|\.nuget|node_modules|bin|obj|klanker\.local\.json)(\/|$)/.test(path), path);

@@ -17,7 +17,7 @@ Run the CLI through the repo's pnpm script:
 
 ```sh
 pnpm klanker ls
-pnpm klanker deploy ascent.js --to guidance --run
+pnpm klanker deploy ascent.ts --to guidance --run
 pnpm klanker logs -f --to guidance
 ```
 
@@ -29,7 +29,9 @@ If the game is elsewhere or you moved the endpoint file, pass
 ```text
 klanker ping                         Check the bridge.
 klanker ls                           List onboard actors.
-klanker deploy <file> --to <alias>   Deploy a .js file to an actor.
+klanker build <file>                 Bundle a worker and print it (no game needed).
+klanker check <file>                 Type-check a worker against the host API and libs.
+klanker deploy <file> --to <alias>   Bundle and deploy a worker to an actor.
                       --id <id>      Address the actor by workerId instead.
                       [--run]        Start it after deploying.
 klanker restart <alias|workerId>     Restart an actor.
@@ -39,6 +41,12 @@ klanker state <alias|workerId>       Print the actor's saved storage JSON.
 klanker state-reset <alias|workerId> Clear the actor's saved storage.
 klanker logs [-f] [--to <alias>]     Stream worker logs (Ctrl-C to stop).
 ```
+
+`<file>` may be TypeScript (`.ts`) or JavaScript. `build`/`deploy` bundle it
+with esbuild, inlining local, npm, and `klanker:*` imports into one module; the
+deployed file is always named `<name>.js`. `check` runs the TypeScript compiler
+against the host API declaration and the libraries, so you catch mistakes
+before deploying. See [Worker libraries](libraries.md).
 
 Aliases are human selectors and need not be unique; if one matches several
 actors, the CLI reports the ambiguity and you should use the `workerId` from

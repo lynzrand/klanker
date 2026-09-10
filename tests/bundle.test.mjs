@@ -8,18 +8,19 @@ import { bundleWorker } from '../cli/bundle.mjs';
 test('bundles klanker: modules and relative imports into one ESM default export', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'klanker-bundle-'));
     try {
-        await writeFile(join(directory, 'worker.js'), `
-            import vec from 'klanker:vec';
+        await writeFile(join(directory, 'worker.ts'), `
+            import vec, { type Vec3 } from 'klanker:vec';
             import frame from 'klanker:frame';
             import { AttitudeHold } from 'klanker:attitude';
             const hold = new AttitudeHold();
-            export default { flightTick(ctx) {
-                const target = frame.toLocal(ctx, frame.prograde(ctx));
+            const limit: number = 1;
+            export default { flightTick(ctx: { vessel: any; deltaTime: number }): void {
+                const target: Vec3 = frame.toLocal(ctx, frame.prograde(ctx));
                 hold.aim(ctx, target);
-                if (Math.abs(vec.length(target) - 1) > 1e-9) throw new Error('bad target length');
+                if (Math.abs(vec.length(target) - limit) > 1e-9) throw new Error('bad target length');
             } };
         `);
-        const bundled = await bundleWorker(join(directory, 'worker.js'));
+        const bundled = await bundleWorker(join(directory, 'worker.ts'));
         assert.match(bundled, /as default/);
         assert.doesNotMatch(bundled, /from\s*['"]klanker:/);
 

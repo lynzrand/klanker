@@ -1,17 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { AttitudeHold } from '../lib/attitude.js';
-import frame from '../lib/frame.js';
-import { PID } from '../lib/pid.js';
-import { cross, dot, length, normalize, rotateAround } from '../lib/vec.js';
+import { bundleModule } from '../cli/bundle.mjs';
+
+const load = async name =>
+    import('data:text/javascript;base64,' + Buffer.from(await bundleModule(name)).toString('base64'));
+
+const vec = await load('vec');
+const { PID } = await load('pid');
+const { AttitudeHold } = await load('attitude');
+const frame = await load('frame');
 
 const close = (a, b) => Math.abs(a - b) < 1e-12;
 
 test('vector algebra', () => {
-    assert.equal(dot({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), 0);
-    assert.deepEqual(cross({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), { x: 0, y: 0, z: 1 });
-    assert.ok(close(length(normalize({ x: 3, y: 4, z: 0 })), 1));
-    const rotated = rotateAround({ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, Math.PI / 2);
+    assert.equal(vec.dot({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), 0);
+    assert.deepEqual(vec.cross({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), { x: 0, y: 0, z: 1 });
+    assert.ok(close(vec.length(vec.normalize({ x: 3, y: 4, z: 0 })), 1));
+    const rotated = vec.rotateAround({ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, Math.PI / 2);
     assert.ok(close(rotated.x, 0) && close(rotated.y, 1));
 });
 
