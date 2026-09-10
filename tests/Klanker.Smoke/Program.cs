@@ -61,6 +61,7 @@ internal static class Program
             ViewTests.Run();
             ComputerTests.Run(args[0]);
             StorageTests.Run();
+            BridgeTests.Run(args[0]);
             RuntimeTests.Run();
 
             Console.WriteLine("PASS: native V8, live reads, overlay, rollback, ranges, sync-only, watchdog, validation, recreation.");

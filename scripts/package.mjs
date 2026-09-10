@@ -32,7 +32,7 @@ export async function snapshotSource() {
     const candidates = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean);
     const files = {};
     for (const path of [...new Set(candidates)].sort()) {
-        if (!/^(GameData|src|scripts|tests|docs)\//.test(path) &&
+        if (!/^(GameData|src|scripts|tests|docs|cli)\//.test(path) &&
             !['README.md', 'LICENSE', '.gitignore', 'package.json', 'pnpm-lock.yaml', 'Herebyfile.mjs',
                 'herebyfile.mjs', 'Klanker.sln', 'global.json', 'Directory.Build.props',
                 'Directory.Packages.props', 'NuGet.Config', 'nuget.config', 'klanker.local.example.json'].includes(path)) continue;

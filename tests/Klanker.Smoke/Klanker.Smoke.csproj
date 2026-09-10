@@ -11,9 +11,15 @@
     <Compile Include="../../src/Klanker/Runtime/PartsView.cs" Link="PartsView.cs" />
     <Compile Include="../../src/Klanker/Runtime/ComputerProgram.cs" Link="ComputerProgram.cs" />
     <Compile Include="../../src/Klanker/Runtime/ComputerWorker.cs" Link="ComputerWorker.cs" />
+    <Compile Include="../../src/Klanker/Runtime/KlankerLog.cs" Link="KlankerLog.cs" />
     <Compile Include="../../src/Klanker/KlankerComputer.cs" Link="KlankerComputer.cs" />
     <Compile Include="../../src/Klanker/FlightAddon.cs" Link="FlightAddon.cs" />
+    <Compile Include="../../src/Klanker/Bridge/BridgePaths.cs" Link="BridgePaths.cs" />
+    <Compile Include="../../src/Klanker/Bridge/BridgeServer.cs" Link="BridgeServer.cs" />
+    <Compile Include="../../src/Klanker/Bridge/BridgeDispatcher.cs" Link="BridgeDispatcher.cs" />
+    <Compile Include="../../src/Klanker/Bridge/KlankerBridge.cs" Link="KlankerBridge.cs" />
     <PackageReference Include="Microsoft.ClearScript.V8" />
+    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" PrivateAssets="all" Condition="'$(TargetFramework)' == 'net472'" />
   </ItemGroup>
 </Project>

@@ -16,6 +16,7 @@ function run(command, args, timeout) {
 
 export async function smokeTest(configuration) {
     process.env.KLANKER_TEST_CONFIGURATION = configuration;
+    await run(process.execPath, ['--test', 'tests/bridge-cli.test.mjs'], 15_000);
     await run(process.execPath, ['--test', 'tests/deploy.test.mjs'], 15_000);
     await run(process.execPath, ['--test', 'tests/grasshopper.test.mjs'], 15_000);
     await run(process.execPath, ['--test', 'tests/release.test.mjs'], 15_000);

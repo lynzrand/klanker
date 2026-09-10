@@ -77,8 +77,11 @@ internal sealed class ComputerWorker : IDisposable
     }
 
     private FlightWorker CreateRuntime(string source, string fileName) =>
-        (injectedRuntime ?? FlightAddon.RuntimeHost).CreateWorker(source, message => UnityEngine.Debug.Log(
-            $"[Klanker worker {Program.WorkerId} {fileName}] {message}"), Program.StorageJson);
+        (injectedRuntime ?? FlightAddon.RuntimeHost).CreateWorker(source, message =>
+        {
+            UnityEngine.Debug.Log($"[Klanker worker {Program.WorkerId} {fileName}] {message}");
+            KlankerLog.Publish(Program.WorkerId, fileName, message);
+        }, Program.StorageJson);
 
     internal void CheckpointStorage()
     {

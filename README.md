@@ -67,6 +67,7 @@ sandbox for untrusted scripts.
 ## More
 
 - [Writing workers](docs/workers.md): the current API, examples, and fault behavior.
+- [CLI](docs/cli.md): deploy and control workers on a running game.
 - [Development](docs/development.md): build tasks, deployment, dependencies, and checks.
 - [Design notes](docs/design.md): future plans, not features available today.
 - [Original proposal](docs/proposal.md): the full reference design.

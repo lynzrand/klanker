@@ -10,7 +10,8 @@
     "make": "hereby",
     "bootstrap": "hereby bootstrap",
     "build": "hereby build",
-    "tasks": "hereby --tasks"
+    "tasks": "hereby --tasks",
+    "klanker": "node cli/klanker.mjs"
   },
   "devDependencies": {
     "fflate": "0.8.2",
