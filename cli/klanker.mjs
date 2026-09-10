@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import { bundleWorker } from './bundle.mjs';
 
 export function discoveryCandidates() {
     const home = homedir();
@@ -122,7 +123,8 @@ function usage() {
 
   ping                         Check the bridge.
   ls                           List onboard actors.
-  deploy <file> --to <alias>   Deploy a .js file (--id <workerId> also works).
+  build <file>                 Bundle a worker and print it (no game needed).
+  deploy <file> --to <alias>   Bundle and deploy a .js file (--id <workerId> works too).
               [--run]          Start it after deploying.
   restart <alias|workerId>     Restart an actor.
   stop <alias|workerId>        Stop an actor.
@@ -160,6 +162,12 @@ export async function main(argv = process.argv.slice(2)) {
     const command = positionals.shift();
     if (!command || flags.help) { usage(); return; }
     if (command === 'logs') return streamLogs(flags);
+    if (command === 'build') {
+        const file = positionals.shift();
+        if (!file) throw new Error('build needs a .js file.');
+        process.stdout.write(await bundleWorker(file));
+        return;
+    }
 
     const client = new BridgeClient(readEndpoint(flags.endpoint));
     await client.connect();
@@ -177,7 +185,7 @@ export async function main(argv = process.argv.slice(2)) {
                 const result = await client.request('deploy', {
                     target: target(flags),
                     file: basename(file),
-                    source: readFileSync(file, 'utf8'),
+                    source: await bundleWorker(file),
                     run: flags.run === true,
                 });
                 console.log(describe(result));

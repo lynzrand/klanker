@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
+using System.Text;
 using Microsoft.ClearScript;
 
 namespace Klanker.Runtime;
@@ -15,12 +17,14 @@ public sealed class MechJebContext
     {
         this.binding = binding;
         Attitude = new MechJebAttitudeView(binding);
+        SmartAss = new MechJebSmartAssView(binding);
         Node = new MechJebNodeView(binding);
         Landing = new MechJebLandingView(binding);
     }
     [ScriptMember("available")]
     public bool Available { get { _ = binding.Vessel; return MechJebAccess.Core(binding.Vessel) != null; } }
     [ScriptMember("attitude")] public MechJebAttitudeView Attitude { get; }
+    [ScriptMember("smartAss")] public MechJebSmartAssView SmartAss { get; }
     [ScriptMember("node")] public MechJebNodeView Node { get; }
     [ScriptMember("landing")] public MechJebLandingView Landing { get; }
 }
@@ -29,19 +33,34 @@ public sealed class MechJebAttitudeView
 {
     private readonly TickBinding binding;
     internal MechJebAttitudeView(TickBinding binding) => this.binding = binding;
+    // Enables/disables MechJeb's attitude controller directly. Prefer
+    // smartAss.engage(mode) to also choose a target direction.
     [ScriptMember("enabled")]
     public bool Enabled
     {
         get { _ = binding.Vessel; return MechJebAccess.GetBool(MechJebAccess.Module(binding.Vessel, "attitude"), "enabled"); }
         set { _ = binding.Vessel; MechJebAccess.Set(MechJebAccess.Module(binding.Vessel, "attitude"), "enabled", value); }
     }
-    // One of the MechJeb AttitudeReference names, e.g. ORBIT, SURFACE_NORTH,
-    // TARGET, RELATIVE_VELOCITY or MANEUVER_NODE.
-    [ScriptMember("reference")]
-    public string Reference
+}
+
+// Drives the SmartASS attitude modes. Mirrors the SmartASS window: it sets the
+// module's target and calls Engage(), which points the attitude controller at
+// the matching frame.
+public sealed class MechJebSmartAssView
+{
+    private readonly TickBinding binding;
+    internal MechJebSmartAssView(TickBinding binding) => this.binding = binding;
+    [ScriptMember("engage")]
+    public void Engage(string mode)
     {
-        get { _ = binding.Vessel; return MechJebAccess.GetEnumName(MechJebAccess.Module(binding.Vessel, "attitude"), "attitudeReference"); }
-        set { _ = binding.Vessel; MechJebAccess.SetEnum(MechJebAccess.Module(binding.Vessel, "attitude"), "attitudeReference", value); }
+        _ = binding.Vessel;
+        MechJebAccess.EngageSmartAss(binding.Vessel, mode);
+    }
+    [ScriptMember("disable")]
+    public void Disable()
+    {
+        _ = binding.Vessel;
+        MechJebAccess.EngageSmartAss(binding.Vessel, "off");
     }
 }
 
@@ -82,6 +101,47 @@ public sealed class MechJebLandingView
 // Reflection gateway. Resolves lazily and retries until MechJeb is loaded.
 internal static class MechJebAccess
 {
+    // Friendly aliases (normalized) mapped to MechJebModuleSmartASS.Target names.
+    private static readonly Dictionary<string, string> SmartAssModes = new(StringComparer.Ordinal)
+    {
+        ["OFF"] = "OFF",
+        ["KILLROT"] = "KILLROT",
+        ["NODE"] = "NODE",
+        ["MANEUVERNODE"] = "NODE",
+        ["SURFACE"] = "SURFACE",
+        ["PROGRADE"] = "PROGRADE",
+        ["RETROGRADE"] = "RETROGRADE",
+        ["NORMAL"] = "NORMAL_PLUS",
+        ["NORMALPLUS"] = "NORMAL_PLUS",
+        ["ANTINORMAL"] = "NORMAL_MINUS",
+        ["NORMALMINUS"] = "NORMAL_MINUS",
+        ["RADIAL"] = "RADIAL_PLUS",
+        ["RADIALPLUS"] = "RADIAL_PLUS",
+        ["ANTIRADIAL"] = "RADIAL_MINUS",
+        ["RADIALMINUS"] = "RADIAL_MINUS",
+        ["RELATIVE"] = "RELATIVE_PLUS",
+        ["RELATIVEPLUS"] = "RELATIVE_PLUS",
+        ["RELATIVEVELOCITY"] = "RELATIVE_PLUS",
+        ["ANTIRELATIVE"] = "RELATIVE_MINUS",
+        ["RELATIVEMINUS"] = "RELATIVE_MINUS",
+        ["TARGET"] = "TARGET_PLUS",
+        ["TARGETPLUS"] = "TARGET_PLUS",
+        ["ANTITARGET"] = "TARGET_MINUS",
+        ["TARGETMINUS"] = "TARGET_MINUS",
+        ["PARALLEL"] = "PARALLEL_PLUS",
+        ["PARALLELPLUS"] = "PARALLEL_PLUS",
+        ["ANTIPARALLEL"] = "PARALLEL_MINUS",
+        ["PARALLELMINUS"] = "PARALLEL_MINUS",
+        ["SURFACEPROGRADE"] = "SURFACE_PROGRADE",
+        ["SURFACERETROGRADE"] = "SURFACE_RETROGRADE",
+        ["HORIZONTAL"] = "HORIZONTAL_PLUS",
+        ["HORIZONTALPLUS"] = "HORIZONTAL_PLUS",
+        ["HORIZONTALMINUS"] = "HORIZONTAL_MINUS",
+        ["VERTICAL"] = "VERTICAL_PLUS",
+        ["UP"] = "VERTICAL_PLUS",
+        ["VERTICALPLUS"] = "VERTICAL_PLUS",
+    };
+
     private static bool resolved;
     private static Type? coreType;
     private static MethodInfo? getMaster;
@@ -102,6 +162,15 @@ internal static class MechJebAccess
     internal static object RequireCore(Vessel vessel) =>
         Core(vessel) ?? throw new InvalidOperationException("MechJeb is not installed on this vessel.");
 
+    internal static void EngageSmartAss(Vessel vessel, string mode)
+    {
+        var smartAss = FindSmartAss(vessel);
+        var targetType = smartAss.GetType().GetNestedType("Target")
+            ?? throw new InvalidOperationException("MechJeb SmartASS has no Target enum.");
+        Set(smartAss, "target", Enum.Parse(targetType, TargetName(mode), false));
+        Invoke(smartAss, "Engage", true);
+    }
+
     internal static object Module(Vessel vessel, string field) => Module(RequireCore(vessel), field);
 
     internal static object Module(object core, string field)
@@ -111,8 +180,6 @@ internal static class MechJebAccess
     }
 
     internal static bool GetBool(object instance, string name) => GetMember(instance, name) is bool value && value;
-
-    internal static string GetEnumName(object instance, string name) => GetMember(instance, name)?.ToString() ?? "";
 
     internal static void Set(object instance, string name, object value)
     {
@@ -132,26 +199,39 @@ internal static class MechJebAccess
         throw new InvalidOperationException($"MechJeb member '{name}' was not found.");
     }
 
-    internal static void SetEnum(object instance, string name, string enumName)
-    {
-        var type = instance.GetType();
-        var property = type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
-        var field = type.GetField(name, BindingFlags.Public | BindingFlags.Instance);
-        var target = property?.PropertyType ?? field?.FieldType
-            ?? throw new InvalidOperationException($"MechJeb member '{name}' was not found.");
-        if (!target.IsEnum) throw new InvalidOperationException($"MechJeb member '{name}' is not an enum.");
-        object value;
-        try { value = Enum.Parse(target, enumName, true); }
-        catch (ArgumentException) { throw new ArgumentException($"Unknown MechJeb reference: {enumName}"); }
-        Set(instance, name, value);
-    }
-
     internal static void Invoke(object instance, string method, params object[] arguments)
     {
         var info = instance.GetType().GetMethod(method, BindingFlags.Public | BindingFlags.Instance);
         if (info == null) throw new InvalidOperationException($"MechJeb method '{method}' was not found.");
         try { info.Invoke(instance, arguments); }
         catch (TargetInvocationException exception) { throw exception.InnerException ?? exception; }
+    }
+
+    private static object FindSmartAss(Vessel vessel)
+    {
+        var core = RequireCore(vessel);
+        var find = core.GetType().GetMethod("GetComputerModule", new[] { typeof(string) })
+            ?? throw new InvalidOperationException("MechJeb core has no GetComputerModule(string).");
+        return find.Invoke(core, new object[] { "MechJebModuleSmartASS" })
+            ?? throw new InvalidOperationException("MechJeb has no SmartASS module.");
+    }
+
+    private static string TargetName(string mode)
+    {
+        var normalized = Normalize(mode);
+        if (SmartAssModes.TryGetValue(normalized, out var target)) return target;
+        throw new ArgumentException(
+            $"Unknown SmartASS mode: {mode}. Use prograde, retrograde, normal, antinormal, radial, antiradial, " +
+            "target, antitarget, relative, antirelative, surfacePrograde, surfaceRetrograde, horizontal, vertical, " +
+            "killRot, node, surface or off.", nameof(mode));
+    }
+
+    private static string Normalize(string value)
+    {
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+            if (char.IsLetterOrDigit(character)) builder.Append(char.ToUpperInvariant(character));
+        return builder.ToString();
     }
 
     private static object? GetMember(object instance, string name)

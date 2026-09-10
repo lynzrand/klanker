@@ -224,14 +224,25 @@ declare namespace Klanker {
     interface MechJebContext {
         readonly available: boolean;
         readonly attitude: MechJebAttitudeView;
+        readonly smartAss: MechJebSmartAssView;
         readonly node: MechJebNodeView;
         readonly landing: MechJebLandingView;
     }
 
     interface MechJebAttitudeView {
+        /** Enables/disables MechJeb's attitude controller directly. */
         enabled: boolean;
-        /** An AttitudeReference name, e.g. ORBIT, SURFACE_NORTH, TARGET, MANEUVER_NODE. */
-        reference: string;
+    }
+
+    interface MechJebSmartAssView {
+        /**
+         * Point at a SmartASS direction: prograde, retrograde, normal,
+         * antinormal, radial, antiradial, target, antitarget, relative,
+         * antirelative, surfacePrograde, surfaceRetrograde, horizontal,
+         * vertical, killRot, node, surface or off.
+         */
+        engage(mode: string): void;
+        disable(): void;
     }
 
     interface MechJebNodeView {

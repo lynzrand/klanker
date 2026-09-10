@@ -1,7 +1,7 @@
 # Writing workers
 
-A worker is a `.js` file in `GameData/Klanker/Workers` with a default export
-containing a synchronous `flightTick` function:
+A worker is a JavaScript module with a default export containing a synchronous
+`flightTick` function:
 
 ```js
 export default {
@@ -10,6 +10,12 @@ export default {
     },
 };
 ```
+
+Deploy it with `pnpm klanker deploy <file> --to <alias>` (see the
+[CLI](cli.md)); the CLI bundles imports into one self-contained module and
+includes the built-in [worker libraries](libraries.md). Files assigned from the
+in-game window are embedded as-is and must be self-contained.
+`GameData/Klanker/Workers` holds the examples and the shipped `klanker.d.ts`.
 
 Klanker calls this handler through KSP's flight-control callback on the active,
 unpacked vessel. It does not invoke the worker while the pause menu is open.

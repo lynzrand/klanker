@@ -14,6 +14,7 @@
     "klanker": "node cli/klanker.mjs"
   },
   "devDependencies": {
+    "esbuild": "0.28.2",
     "fflate": "0.8.2",
     "hereby": "1.15.2",
     "xz-decompress": "0.2.3"

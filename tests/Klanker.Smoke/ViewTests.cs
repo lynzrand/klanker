@@ -18,7 +18,7 @@ internal static class ViewTests
             typeof(ResourceTotals), typeof(ControlView), typeof(TranslationView), typeof(AttitudeView),
             typeof(LocalVectorView), typeof(PartsView), typeof(PartList), typeof(PartRef),
             typeof(PartResourcesView), typeof(EnginesView), typeof(EngineView),
-            typeof(MechJebContext), typeof(MechJebAttitudeView), typeof(MechJebNodeView), typeof(MechJebLandingView) })
+            typeof(MechJebContext), typeof(MechJebAttitudeView), typeof(MechJebSmartAssView), typeof(MechJebNodeView), typeof(MechJebLandingView) })
         {
             var match = Regex.Match(definitions, @"interface\s+" + type.Name + @"\s*\{([^}]+)\}");
             Check(match.Success, "packaged declaration " + type.Name);
@@ -185,7 +185,7 @@ internal static class ViewTests
         context.Begin(vessel, controls);
         Check(!context.MechJeb.Available, "MechJeb reports absent");
         Reject(() => context.MechJeb.Attitude.Enabled = true, "MechJeb attitude requires the mod");
-        Reject(() => _ = context.MechJeb.Attitude.Reference, "MechJeb reference read requires the mod");
+        Reject(() => context.MechJeb.SmartAss.Engage("prograde"), "MechJeb SmartASS requires the mod");
         Reject(() => context.MechJeb.Node.Execute(), "MechJeb node requires the mod");
         Reject(() => context.MechJeb.Landing.Start(), "MechJeb landing requires the mod");
         context.End();
