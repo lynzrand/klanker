@@ -142,6 +142,24 @@ internal static class ViewTests
             Check(logs.FindAll(line => line.Contains("was truncated")).Count == 1, "message truncation warning");
             Check(logs.FindAll(line => line.Contains("rate limit reached")).Count == 1 && logs.Count == 22, "rate limit warning without warning floods");
         }
+        // The rate-warning flag can be derived from the count only if the exact
+        // limit, repeated overflow, and next-window reset retain their behavior.
+        logs.Clear();
+        using (var worker = new FlightWorker("""
+            export default { flightTick() { for (let i = 0; i < 20; i++) console.log('bounded'); } };
+            """, logs.Add))
+        {
+            worker.Tick(vessel, controls);
+            Check(logs.Count == 20, "exact log limit does not warn");
+            worker.Tick(vessel, controls);
+            worker.Tick(vessel, controls);
+            Check(logs.Count == 21 && logs[20].Contains("rate limit reached"), "overflow warns once across ticks");
+            System.Threading.Thread.Sleep(1100);
+            worker.Tick(vessel, controls);
+            Check(logs.Count == 41, "next log window accepts messages again");
+            worker.Tick(vessel, controls);
+            Check(logs.Count == 42 && logs[41].Contains("rate limit reached"), "next log window can warn again");
+        }
         vessel.orbit.eccentricity = 1.2;
         context.Begin(vessel, controls);
         Check(double.IsNaN(orbit.Period) && double.IsNaN(orbit.TimeToApoapsis), "open orbit has no period or next apoapsis");

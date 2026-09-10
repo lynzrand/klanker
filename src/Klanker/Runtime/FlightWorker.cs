@@ -11,14 +11,11 @@ namespace Klanker.Runtime;
 internal sealed class FlightWorker : IDisposable
 {
     private readonly V8ScriptEngine engine;
-    private readonly Stopwatch clock = new();
     private readonly FlightContext context = new();
     private readonly Action<string>? log;
     private readonly Stopwatch logWindow = Stopwatch.StartNew();
     private int logCount;
     private bool truncationReported;
-    private bool rateLimitReported;
-    private double budgetMilliseconds;
     private bool firstTick = true;
     private readonly object interruptGate = new();
     private long invocation;
@@ -44,9 +41,7 @@ internal sealed class FlightWorker : IDisposable
             engine.AddHostObject("__log", new Action<string, bool>(Log));
             engine.AddHostObject("__loadStorage", new Func<string>(() => storageJson));
             engine.DocumentSettings.AddSystemDocument("worker", ModuleCategory.Standard, source);
-            budgetMilliseconds = 2000;
-            clock.Restart();
-            using var watchdog = StartWatchdog();
+            using var watchdog = StartWatchdog(2000);
             engine.Execute(StorageBootstrap);
             context.BindStorage((ScriptObject)engine.Evaluate("__storage"));
             engine.Execute("delete globalThis.__storage");
@@ -93,7 +88,6 @@ internal sealed class FlightWorker : IDisposable
         finally
         {
             EndInvocation();
-            clock.Stop();
         }
     }
 
@@ -159,32 +153,32 @@ internal sealed class FlightWorker : IDisposable
 
     internal string SnapshotStorage()
     {
-        budgetMilliseconds = 250;
-        clock.Restart();
+        const int budgetMilliseconds = 250;
+        var started = Stopwatch.GetTimestamp();
         try
         {
-            using var watchdog = StartWatchdog();
+            using var watchdog = StartWatchdog(budgetMilliseconds);
             var json = (string)engine.Invoke("__snapshotStorage");
-            if (clock.Elapsed.TotalMilliseconds > budgetMilliseconds)
+            if ((Stopwatch.GetTimestamp() - started) * 1000d / Stopwatch.Frequency > budgetMilliseconds)
                 throw new TimeoutException("Storage serialization exceeded 250 ms.");
             return json;
         }
-        finally { EndInvocation(); clock.Stop(); }
+        finally { EndInvocation(); }
     }
 
     internal void Tick(Vessel vessel, FlightCtrlState controls)
     {
         context.Begin(vessel, controls);
         // Allow CLR/JIT and host binding setup once, while still bounding startup.
-        budgetMilliseconds = firstTick ? 250 : 20;
+        var budgetMilliseconds = firstTick ? 250 : 20;
         firstTick = false;
-        clock.Restart();
+        var started = Stopwatch.GetTimestamp();
         try
         {
-            using var watchdog = StartWatchdog();
+            using var watchdog = StartWatchdog(budgetMilliseconds);
             engine.Invoke("__flightTick");
             // Also reject an over-budget invocation that finished between watchdog polls.
-            if (clock.Elapsed.TotalMilliseconds > budgetMilliseconds)
+            if ((Stopwatch.GetTimestamp() - started) * 1000d / Stopwatch.Frequency > budgetMilliseconds)
                 throw new TimeoutException($"flightTick exceeded its {budgetMilliseconds} ms budget.");
             context.Commit();
         }
@@ -192,11 +186,10 @@ internal sealed class FlightWorker : IDisposable
         {
             EndInvocation();
             context.End();
-            clock.Stop();
         }
     }
 
-    private Timer StartWatchdog()
+    private Timer StartWatchdog(int budgetMilliseconds)
     {
         long current;
         lock (interruptGate) current = ++invocation;
@@ -206,7 +199,7 @@ internal sealed class FlightWorker : IDisposable
             {
                 if (invocation == current) engine.Interrupt();
             }
-        }, null, (int)budgetMilliseconds, Timeout.Infinite);
+        }, null, budgetMilliseconds, Timeout.Infinite);
     }
 
     private void EndInvocation()
@@ -221,13 +214,13 @@ internal sealed class FlightWorker : IDisposable
             logWindow.Restart();
             logCount = 0;
             truncationReported = false;
-            rateLimitReported = false;
         }
         if (logCount >= 20)
         {
-            if (!rateLimitReported)
+            if (logCount == 20)
             {
-                rateLimitReported = true;
+                // Saturate at 21 to record that this window has already warned.
+                logCount++;
                 log?.Invoke("WARNING: console.log rate limit reached (20 messages/second); further messages are dropped until the next window.");
             }
             return;

@@ -39,6 +39,19 @@ internal static class RuntimeTests
         using var fresh = host.CreateWorker("export default { flightTick({vessel}) { vessel.control.throttle = 0; } };");
         fresh.Tick(vessel, controls);
         Check(controls.mainThrottle == 0, "fresh context after watchdog fault");
+        // Keep first-tick grace distinct from steady-state and storage budgets
+        // when moving timeout bookkeeping out of persistent worker fields.
+        using (var budgeted = host.CreateWorker("""
+            export default { flightTick({vessel}) { console.log('wait'); vessel.control.throttle = 0.5; } };
+            """, _ => System.Threading.Thread.Sleep(40)))
+        {
+            budgeted.Tick(vessel, controls);
+            Check(controls.mainThrottle == 0.5f, "first tick permits host setup beyond steady-state budget");
+            Check(budgeted.SnapshotStorage() == "{}", "storage snapshot between flight ticks");
+            controls.mainThrottle = 0.1f;
+            Reject(() => budgeted.Tick(vessel, controls), "steady-state budget restored after storage snapshot");
+            Check(controls.mainThrottle == 0.1f, "over-budget host call cannot commit controls");
+        }
         host.Dispose();
         Check(second.IsDisposed && fresh.IsDisposed && host.ContextCount == 0, "owner disposes remaining contexts");
         Reject(() => host.CreateWorker("export default {};"), "disposed owner cannot create contexts");
