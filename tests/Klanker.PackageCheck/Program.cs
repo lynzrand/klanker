@@ -44,7 +44,8 @@ internal static class Program
                         var blob = metadata.GetBlobReader(attribute.Value);
                         if (blob.ReadUInt16() != 1) throw new BadImageFormatException("Invalid attribute prolog");
                         var name = blob.ReadSerializedString();
-                        var version = new Version(blob.ReadInt32(), blob.ReadInt32(), blob.ReadInt32());
+                        // KSPAssemblyDependency has two- and three-integer constructors.
+                        var version = ReadVersion(blob);
                         if (name == "MechJeb2")
                         {
                             if (Path.GetFileName(path) == "Klanker.dll") foundMechJebDependency = true;
@@ -86,6 +87,15 @@ internal static class Program
             ? metadata.GetString(metadata.GetTypeReference((TypeReferenceHandle)constructor.Parent).Name) : "";
     }
 
+    // KSPAssembly/KSPAssemblyDependency serialize either (major, minor) or
+    // (major, minor, revision). Never assume the longer form is present.
+    private static Version ReadVersion(BlobReader blob)
+    {
+        var major = blob.ReadInt32();
+        var minor = blob.ReadInt32();
+        return new Version(major, minor, blob.RemainingBytes >= 4 ? blob.ReadInt32() : 0);
+    }
+
     private static Version KspIdentity(string path)
     {
         using var stream = File.OpenRead(path);
@@ -99,11 +109,9 @@ internal static class Program
             if (blob.ReadUInt16() != 1) throw new BadImageFormatException("Invalid attribute prolog");
             if (blob.ReadSerializedString() == "MechJeb2")
             {
-                var major = blob.ReadInt32();
-                var minor = blob.ReadInt32();
                 // MechJeb uses the two-integer KSPAssembly constructor, which
                 // defaults its API revision to zero.
-                return new Version(major, minor, blob.RemainingBytes >= 6 ? blob.ReadInt32() : 0);
+                return ReadVersion(blob);
             }
         }
         throw new InvalidOperationException("Pinned MechJeb DLL has no KSPAssembly identity.");

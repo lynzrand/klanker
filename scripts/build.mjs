@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { copyFile, cp, mkdir, readFile, realpath, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
@@ -51,7 +52,7 @@ export async function copyClearScriptNativeLibraries(buildConfiguration) {
     await cp(join(import.meta.dirname, '..', 'GameData'), join(import.meta.dirname, '..', 'build', 'GameData'), { recursive: true });
     const projectDirectory = join(import.meta.dirname, '..', 'src', 'Klanker');
     const assets = JSON.parse(await readFile(join(projectDirectory, 'obj', 'project.assets.json'), 'utf8'));
-    const packageRoot = Object.keys(assets.packageFolders)[0];
+    const packageRoots = Object.keys(assets.packageFolders);
     const pluginDirectory = join(import.meta.dirname, '..', 'build', 'GameData', 'Klanker', 'Plugins');
     const nativeDirectory = join(pluginDirectory, 'PluginData');
     const runtimes = [
@@ -74,7 +75,14 @@ export async function copyClearScriptNativeLibraries(buildConfiguration) {
             throw new Error(`${packageName} is missing from the ${buildConfiguration} restore graph.`);
         }
 
-        return join(packageRoot, packageEntry[1].path);
+        // NuGet can report more than one package folder; locate the one that
+        // actually contains the restored package instead of assuming the first.
+        for (const root of packageRoots) {
+            const candidate = join(root, packageEntry[1].path);
+            if (existsSync(candidate)) return candidate;
+        }
+
+        throw new Error(`${packageName} is not present in any configured restore folder.`);
     };
 
     for (const [packageName, runtime, fileName] of runtimes) {
