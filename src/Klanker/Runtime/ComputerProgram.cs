@@ -9,9 +9,11 @@ internal sealed class ComputerProgram
 {
     internal const int MaximumBytes = 128 * 1024;
     internal const int MaximumStorageBytes = 64 * 1024;
+    internal const int MaximumAliasLength = 64;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     private static readonly char[] PathSeparators = { '/', '\\', ':' };
     internal string WorkerId { get; private set; } = "";
+    internal string Alias { get; private set; } = "";
     internal string FileName { get; private set; } = "";
     internal string Source { get; private set; } = "";
     internal bool RunRequested { get; set; }
@@ -29,6 +31,19 @@ internal sealed class ComputerProgram
     internal void EnsureIdentity()
     {
         if (WorkerId.Length == 0) WorkerId = Guid.NewGuid().ToString("N");
+    }
+
+    // Human-friendly selector. Not unique across parts, and never the machine
+    // identity; resolve ambiguity by workerId.
+    internal void SetAlias(string alias)
+    {
+        if (alias == null) throw new ArgumentNullException(nameof(alias));
+        if (alias.Length > MaximumAliasLength)
+            throw new ArgumentException($"Aliases are limited to {MaximumAliasLength} characters.", nameof(alias));
+        foreach (var character in alias)
+            if (char.IsControl(character))
+                throw new ArgumentException("Aliases cannot contain control characters.", nameof(alias));
+        Alias = alias;
     }
 
     internal void Assign(string fileName, string source)
@@ -52,7 +67,7 @@ internal sealed class ComputerProgram
     internal ComputerProgram CopyForNewPart() => new()
     {
         FileName = FileName, Source = Source, RunRequested = RunRequested, StorageJson = StorageJson,
-        // A copied computer gets a new identity and does not inherit a runtime fault.
+        // A copy gets a new identity and no alias, and does not inherit a runtime fault.
     };
 
     internal void Save(Action<string, string> set, bool flight)
@@ -60,6 +75,7 @@ internal sealed class ComputerProgram
         set("klankerVersion", "1");
         // Craft templates must not give every launch the same actor identity.
         set("workerId", flight ? WorkerId : "");
+        set("alias", Alias);
         set("scriptFile", FileName);
         set("scriptBase64", Convert.ToBase64String(Utf8.GetBytes(Source)));
         set("runRequested", RunRequested ? "True" : "False");
@@ -77,6 +93,7 @@ internal sealed class ComputerProgram
         if (id.Length != 0 && !Guid.TryParseExact(id, "N", out _))
             throw new FormatException("Invalid Klanker worker identity.");
         result.WorkerId = id;
+        result.SetAlias(get("alias") ?? "");
         var fileName = get("scriptFile") ?? "";
         var source = Decode(get("scriptBase64"), MaximumBytes);
         if (fileName.Length != 0) result.Assign(fileName, source);

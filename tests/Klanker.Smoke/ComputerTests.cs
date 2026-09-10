@@ -13,15 +13,21 @@ internal static class ComputerTests
         var program = new ComputerProgram();
         program.Assign("test.js", source);
         program.EnsureIdentity();
+        program.SetAlias("guidance");
         program.RunRequested = true;
         var saved = Save(program, true);
         var restored = ComputerProgram.Load(key => saved.TryGetValue(key, out var value) ? value : null);
         Check(restored.Source == source && restored.WorkerId == program.WorkerId && restored.RunRequested, "script and identity round-trip without local file");
+        Check(restored.Alias == "guidance", "alias round-trip");
         var craft = Save(program, false);
         Check(craft["workerId"] == "", "craft template omits flight identity");
+        Check(craft["alias"] == "guidance", "craft template keeps the alias");
         var clone = program.CopyForNewPart();
         clone.EnsureIdentity();
         Check(clone.WorkerId != program.WorkerId && clone.Source == source, "copied pod gets independent identity and assignment");
+        Check(clone.Alias == "", "copied pod does not inherit the alias");
+        Reject(() => program.SetAlias(new string('a', ComputerProgram.MaximumAliasLength + 1)), "alias length limit");
+        Reject(() => program.SetAlias("bad\nname"), "alias control characters");
         foreach (var name in new[] { "../test.js", "..\\test.js", "C:test.js", "", "test.txt" })
             Reject(() => ComputerProgram.Validate(name, source), "invalid filename " + name);
         Reject(() => ComputerProgram.Validate("huge.js", new string('界', ComputerProgram.MaximumBytes / 3 + 1)), "UTF-8 byte limit");

@@ -21,6 +21,7 @@ public sealed class FlightAddon : MonoBehaviour
     private Vessel? controlledVessel;
     private Rect window = new(30, 80, 440, 340);
     private string scriptName = "observe.js";
+    private string aliasName = "";
     private string message = "";
     private bool visible;
     private WorkerRuntime? runtimeHost;
@@ -59,6 +60,7 @@ public sealed class FlightAddon : MonoBehaviour
     {
         selected = computer;
         scriptName = computer.Computer.Program.HasScript ? computer.Computer.Program.FileName : "observe.js";
+        aliasName = computer.Computer.Program.Alias;
         message = "";
     }
 
@@ -115,6 +117,9 @@ public sealed class FlightAddon : MonoBehaviour
             GUILayout.Label("Computer: " + selected.part.partInfo.title);
             GUILayout.Label(program.WorkerId.Length == 0 ? "Worker identity assigned at launch." : "Worker: " + program.WorkerId);
             GUILayout.Label("Assigned: " + (program.HasScript ? program.FileName : "none"));
+            GUILayout.Label("Alias (CLI selector, not unique): " + (program.Alias.Length == 0 ? "none" : program.Alias));
+            aliasName = GUILayout.TextField(aliasName, ComputerProgram.MaximumAliasLength);
+            if (GUILayout.Button("Set alias")) Invoke(() => { selected.Computer.Program.SetAlias(aliasName); message = "Alias set. Save the craft/game to keep it."; });
             GUILayout.Label(computer.Status);
             if (computer.StorageError.Length != 0) GUILayout.Label(computer.StorageError);
             GUILayout.Label($"Successful ticks: {computer.SuccessfulTicks}");

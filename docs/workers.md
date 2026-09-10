@@ -186,6 +186,8 @@ and remain stopped across reactivation and game reload until explicit recovery.
 
 Worker identities are assigned in flight and saved with the part. Craft templates
 and copied parts receive fresh identities, while retaining their script assignments.
+A part may also carry a human-readable **alias** (set in the window): aliases are
+selectors, not identities—they are not unique, and copies do not inherit them.
 There is no shared memory between computers. No power consumption or computer
 resource model is implemented yet, and unloaded/background vessels do not run.
 

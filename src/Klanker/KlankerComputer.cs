@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using Klanker.Runtime;
 using UnityEngine;
@@ -9,6 +10,11 @@ namespace Klanker;
     Justification = "Unity owns PartModule lifetime; OnDestroy disposes the worker.")]
 public sealed class KlankerComputer : PartModule
 {
+    // Every live module, so the bridge/CLI can enumerate actors without walking
+    // the scene graph. Membership tracks OnStart/OnDestroy, not authority.
+    private static readonly List<KlankerComputer> registry = new();
+    internal static IReadOnlyList<KlankerComputer> Registry => registry;
+
     private ComputerWorker computer = new(new ComputerProgram());
     private ConfigNode? unreadableSave;
     internal ComputerWorker Computer => computer;
@@ -27,6 +33,7 @@ public sealed class KlankerComputer : PartModule
     public override void OnStart(StartState state)
     {
         base.OnStart(state);
+        if (!registry.Contains(this)) registry.Add(this);
         if (HighLogic.LoadedSceneIsFlight) computer.Program.EnsureIdentity();
         else if (HighLogic.LoadedSceneIsEditor && unreadableSave == null)
         {
@@ -83,5 +90,9 @@ public sealed class KlankerComputer : PartModule
         if (HighLogic.LoadedSceneIsFlight) computer.Program.EnsureIdentity();
     }
 
-    public void OnDestroy() => computer.Dispose();
+    public void OnDestroy()
+    {
+        registry.Remove(this);
+        computer.Dispose();
+    }
 }
