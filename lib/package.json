@@ -1,0 +1,42 @@
+{
+  "name": "klanker",
+  "version": "0.1.0",
+  "description": "Klanker worker standard library: vectors, PID, attitude, coordinate frames, and MechJeb helpers.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "exports": {
+    ".": {
+      "types": "./index.ts",
+      "default": "./index.ts"
+    },
+    "./vec": {
+      "types": "./vec.ts",
+      "default": "./vec.ts"
+    },
+    "./pid": {
+      "types": "./pid.ts",
+      "default": "./pid.ts"
+    },
+    "./attitude": {
+      "types": "./attitude.ts",
+      "default": "./attitude.ts"
+    },
+    "./frame": {
+      "types": "./frame.ts",
+      "default": "./frame.ts"
+    },
+    "./mechjeb": {
+      "types": "./mechjeb.ts",
+      "default": "./mechjeb.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "*.ts"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  }
+}

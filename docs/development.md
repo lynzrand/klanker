@@ -6,14 +6,21 @@ need to work in KSP's Unity/Mono runtime.
 
 ## Build tasks
 
-Build tooling is JavaScript, run by [Hereby](https://github.com/jakebailey/hereby)
-through `pnpm make`. No system `make` or PowerShell scripts are needed.
+Build tooling is TypeScript, run by [Hereby](https://github.com/jakebailey/hereby)
+through `pnpm make`; Node 22.18+ executes the `.ts` files directly. No system
+`make` or PowerShell scripts are needed.
 
 ```sh
 pnpm make build --configuration Release  # Produce build/GameData/Klanker
 pnpm make test --configuration Release   # Build, validate, and run smoke tests
 pnpm tasks                              # List all tasks
+pnpm typecheck                          # Check every TypeScript source
+pnpm build:js                           # Build the cli/dist package output
 ```
+
+The CLI and the worker standard library are separate npm packages: `klanker-cli`
+(the `klanker` bin) and `klanker` (the importable `lib/` modules). Both live in
+this workspace; the root package is private build tooling.
 
 `pnpm make` defaults to a Debug build. `bootstrap` fetches the KSP and MechJeb
 definitions; `compile` builds the plugin; `build` adds runtime dependencies and
@@ -49,12 +56,12 @@ pinned in the build scripts and central NuGet configuration:
 
 - [kRPC's KSP library archive](https://github.com/krpc/ksp-lib) supplies stripped
   KSP 1.12.5 definitions, for compilation only.
-- MechJeb release **2.14.3.0** is fetched by `scripts/bootstrap.mjs`. Its internal
+- MechJeb release **2.14.3.0** is fetched by `scripts/bootstrap.ts`. Its internal
   KSP assembly identity is **2.5.0**, which is what Klanker's dependency attribute
   must request. The API identity is not the release version.
 - ClearScript **7.5.1.1** comes from NuGet, including V8, ICU data, and native
   libraries for Windows, Linux, and macOS x64.
-- `scripts/mono-runtime.mjs` fills gaps in KSP's stripped framework libraries
+- `scripts/mono-runtime.ts` fills gaps in KSP's stripped framework libraries
   using executable Mono DLLs from the sources below. Microsoft's .NET reference
   pack is only for compilation and must never be shipped as runtime code.
 

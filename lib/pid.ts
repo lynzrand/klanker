@@ -6,10 +6,10 @@ export class PID {
     kp: number;
     ki: number;
     kd: number;
-    integral: number;
-    derivative: number;
-    previous: number | null;
-    output: number;
+    integral = 0;
+    derivative = 0;
+    previous: number | null = null;
+    output = 0;
 
     constructor(kp = 0, ki = 0, kd = 0) {
         this.kp = kp;

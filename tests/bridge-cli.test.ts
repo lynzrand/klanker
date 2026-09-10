@@ -1,25 +1,25 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { createServer } from 'node:net';
+import { createServer, type AddressInfo, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { BridgeClient, readEndpoint } from '../cli/klanker.mjs';
+import { BridgeClient, readEndpoint } from '../cli/klanker.ts';
 
 // Minimal server that speaks the same JSONL protocol as BridgeServer.
-function mockBridge(token) {
+function mockBridge(token: string): Promise<{ server: ReturnType<typeof createServer>; port: number }> {
     return new Promise(resolve => {
-        const server = createServer(socket => {
+        const server = createServer((socket: Socket) => {
             socket.setEncoding('utf8');
             let buffer = '';
-            socket.on('data', chunk => {
-                buffer += chunk;
+            socket.on('data', (chunk) => {
+                buffer += chunk.toString();
                 let index;
                 while ((index = buffer.indexOf('\n')) >= 0) {
                     const line = buffer.slice(0, index);
                     buffer = buffer.slice(index + 1);
                     if (!line.trim()) continue;
-                    const request = JSON.parse(line);
+                    const request = JSON.parse(line) as { id: number; token: string; method: string };
                     if (request.token !== token) {
                         socket.write(JSON.stringify({ id: request.id, ok: false, error: 'Unauthorized.' }) + '\n');
                         continue;
@@ -31,7 +31,7 @@ function mockBridge(token) {
                 }
             });
         });
-        server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
+        server.listen(0, '127.0.0.1', () => resolve({ server, port: (server.address() as AddressInfo).port }));
     });
 }
 
@@ -46,7 +46,7 @@ test('bridge client resolves a discovery file and speaks the protocol', async ()
         const client = new BridgeClient(endpoint);
         await client.connect();
         assert.deepEqual(await client.request('ping', {}), { pong: true });
-        assert.equal((await client.request('list', {})).actors[0].alias, 'guidance');
+        assert.equal(((await client.request('list', {})) as { actors: { alias: string }[] }).actors[0].alias, 'guidance');
         client.close();
     } finally {
         await new Promise(resolve => server.close(resolve));

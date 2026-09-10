@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { bundleWorker } from '../cli/bundle.mjs';
+import { bundleWorker } from '../cli/bundle.ts';
 
 test('bundles klanker: modules and relative imports into one ESM default export', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'klanker-bundle-'));
@@ -25,17 +25,37 @@ test('bundles klanker: modules and relative imports into one ESM default export'
         assert.doesNotMatch(bundled, /from\s*['"]klanker:/);
 
         // The bundle must be valid ESM with a runnable default export.
-        const module = await import('data:text/javascript;base64,' + Buffer.from(bundled).toString('base64'));
+        const module = await import('data:text/javascript;base64,' + Buffer.from(bundled).toString('base64')) as any;
         const vessel = {
             attitude: {
                 east: { x: 1, y: 0, z: 0 }, north: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 },
                 angularVelocity: { x: 0, y: 0, z: 0 },
             },
             velocity: { orbital: { x: 0, y: 1, z: 0 }, surface: { x: 0, y: 1, z: 0 } },
-            control: {},
+            control: {} as Record<string, number>,
         };
         module.default.flightTick({ vessel, deltaTime: 0.02 });
         assert.ok(Number.isFinite(vessel.control.yaw));
+    } finally {
+        await rm(directory, { recursive: true, force: true });
+    }
+});
+
+test('bundles bare klanker and klanker/<name> specifiers too', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'klanker-bundle-'));
+    try {
+        await writeFile(join(directory, 'worker.ts'), `
+            import { PID } from 'klanker/pid';
+            import { vec } from 'klanker';
+            export default { flightTick(): void {
+                const pid = new PID(1, 0, 0);
+                pid.update(vec.length({ x: 1, y: 0, z: 0 }), 0, 0.02, 1);
+            } };
+        `);
+        const bundled = await bundleWorker(join(directory, 'worker.ts'));
+        assert.doesNotMatch(bundled, /from\s*['"]klanker/);
+        const module = await import('data:text/javascript;base64,' + Buffer.from(bundled).toString('base64')) as any;
+        module.default.flightTick();
     } finally {
         await rm(directory, { recursive: true, force: true });
     }

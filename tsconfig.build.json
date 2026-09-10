@@ -1,0 +1,15 @@
+{
+    // Emits the publishable CLI package. The `klanker` standard library in lib/
+    // ships as pure TypeScript and is bundled into workers by esbuild.
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "noEmit": false,
+        "module": "NodeNext",
+        "moduleResolution": "NodeNext",
+        "declaration": false,
+        "outDir": "cli/dist",
+        "rootDir": "cli"
+    },
+    "include": ["cli/**/*.ts"],
+    "exclude": ["node_modules", "cli/dist", "build", ".cache", ".nuget", "tests", "scripts", "lib"]
+}

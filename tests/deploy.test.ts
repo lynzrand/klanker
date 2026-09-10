@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { configureLocal, deploy, deploymentPath } from '../scripts/deploy.mjs';
+import { configureLocal, deploy, deploymentPath } from '../scripts/deploy.ts';
 
 test('deploy validates the target, preserves workers, replaces binaries, and backs up outside GameData', async () => {
     const cache = resolve(import.meta.dirname, '..', '.cache');
@@ -38,6 +38,7 @@ test('deploy validates the target, preserves workers, replaces binaries, and bac
         await writeFile(join(first.destination, 'Patches', 'command-computers.cfg'), 'old patch');
         await writeFile(join(first.destination, 'Patches', 'obsolete.cfg'), 'obsolete patch');
         const second = await deploy(game, source);
+        assert.ok(second.backup);
         assert.equal(await readFile(join(second.destination, 'Workers', 'observe.js'), 'utf8'), 'my edited worker');
         assert.equal(await readFile(join(second.destination, 'Workers', 'klanker.d.ts'), 'utf8'), 'new API');
         assert.equal(await readFile(join(second.backup, 'Workers', 'klanker.d.ts'), 'utf8'), 'old API');

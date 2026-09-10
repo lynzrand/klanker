@@ -2,10 +2,12 @@
 /.nuget/
 /.vs/
 /build/
-/node_modules/
+/cli/dist/
+node_modules/
 /klanker.local.json
 **/bin/
 **/obj/
 *.suo
 *.user
 *.userosscache
+*.tgz

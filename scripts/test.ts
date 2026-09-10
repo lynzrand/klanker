@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
 
-function run(command, args, timeout) {
+function run(command: string, args: string[], timeout: number): Promise<void> {
     return new Promise((resolvePromise, reject) => {
         const child = spawn(command, args, { cwd: root, shell: false, stdio: 'inherit', timeout });
         child.once('error', reject);
@@ -14,16 +14,16 @@ function run(command, args, timeout) {
     });
 }
 
-export async function smokeTest(configuration) {
+export async function smokeTest(configuration: string): Promise<void> {
     process.env.KLANKER_TEST_CONFIGURATION = configuration;
-    await run(process.execPath, ['--test', 'tests/lib.test.mjs'], 20_000);
-    await run(process.execPath, ['--test', 'tests/bundle.test.mjs'], 30_000);
-    await run(process.execPath, ['--test', 'tests/check.test.mjs'], 90_000);
-    await run(process.execPath, ['--test', 'tests/bridge-cli.test.mjs'], 15_000);
-    await run(process.execPath, ['--test', 'tests/deploy.test.mjs'], 15_000);
-    await run(process.execPath, ['--test', 'tests/grasshopper.test.mjs'], 15_000);
-    await run(process.execPath, ['--test', 'tests/release.test.mjs'], 15_000);
-    await run(process.execPath, ['--test', 'tests/package.test.mjs'], 30_000);
+    await run(process.execPath, ['--test', 'tests/lib.test.ts'], 20_000);
+    await run(process.execPath, ['--test', 'tests/bundle.test.ts'], 30_000);
+    await run(process.execPath, ['--test', 'tests/check.test.ts'], 90_000);
+    await run(process.execPath, ['--test', 'tests/bridge-cli.test.ts'], 15_000);
+    await run(process.execPath, ['--test', 'tests/deploy.test.ts'], 15_000);
+    await run(process.execPath, ['--test', 'tests/grasshopper.test.ts'], 15_000);
+    await run(process.execPath, ['--test', 'tests/release.test.ts'], 15_000);
+    await run(process.execPath, ['--test', 'tests/package.test.ts'], 30_000);
     const project = join(root, 'tests', 'Klanker.Smoke');
     const plugins = join(root, 'build', 'GameData', 'Klanker', 'Plugins');
     await run('dotnet', ['build', project, '-c', configuration], 120_000);

@@ -10,7 +10,7 @@ const checker = join(root, 'tests', 'Klanker.PackageCheck', 'bin', configuration
 const plugins = join(root, 'build', 'GameData', 'Klanker', 'Plugins');
 const ksp = join(root, '.cache', 'ksp', '1.12.5');
 
-function check(path) {
+function check(path: string): { code: number | null; output: string } {
     const result = spawnSync('dotnet', [checker, path, ksp], { encoding: 'utf8', timeout: 10_000 });
     if (result.error) throw result.error;
     return { code: result.status, output: result.stdout + result.stderr };

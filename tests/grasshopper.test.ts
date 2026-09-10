@@ -4,20 +4,30 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const source = await readFile(new URL('../GameData/Klanker/Workers/grasshopper.js', import.meta.url), 'utf8');
-function load() {
-    const logs = [];
-    const sandbox = { console: { log: (...args) => logs.push(args.join(' ')) } };
+
+interface Loaded {
+    worker: any;
+    logs: string[];
+    PID: any;
+    state: () => string;
+    setPhase: (phase: string) => void;
+    horizontal: any[];
+}
+
+function load(): Loaded {
+    const logs: string[] = [];
+    const sandbox: any = { console: { log: (...args: unknown[]) => logs.push(args.join(' ')) } };
     vm.runInNewContext(source.replace('export default', 'globalThis.worker =') +
         '\n globalThis.PID = PID; globalThis.state = () => phase; globalThis.setPhase = transition; globalThis.horizontal = [northPID, eastPID];', sandbox);
     return { worker: sandbox.worker, logs, PID: sandbox.PID, state: sandbox.state,
         setPhase: sandbox.setPhase, horizontal: sandbox.horizontal };
 }
-const dot = (a, b) => a.reduce((sum, x, i) => sum + x * b[i], 0);
-const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-const magnitude = a => Math.hypot(...a);
-const scale = (a, s) => a.map(x => x * s);
-const add = (a, b) => a.map((x, i) => x + b[i]);
-function rotate(v, omega, dt) {
+const dot = (a: number[], b: number[]): number => a.reduce((sum, x, i) => sum + x * b[i], 0);
+const cross = (a: number[], b: number[]): number[] => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const magnitude = (a: number[]): number => Math.hypot(...a);
+const scale = (a: number[], s: number): number[] => a.map(x => x * s);
+const add = (a: number[], b: number[]): number[] => a.map((x, i) => x + b[i]);
+function rotate(v: number[], omega: number[], dt: number): number[] {
     const speed = magnitude(omega);
     if (speed < 1e-12) return v;
     const axis = scale(omega, 1 / speed), angle = speed * dt;
@@ -25,17 +35,26 @@ function rotate(v, omega, dt) {
         scale(axis, dot(axis, v) * (1 - Math.cos(angle))));
 }
 
+interface SimulateOptions {
+    dt?: number;
+    authority?: number;
+    roll?: number;
+    actualHover?: number;
+    disturbance?: boolean;
+}
+
 // A rigid point-mass/torque model, NOT KSP physics, aerodynamics, gimbal, or landing legs.
-function simulate({ dt = 0.02, authority = 3, roll = 0, actualHover = 0.5, disturbance = false } = {}) {
+function simulate({ dt = 0.02, authority = 3, roll = 0, actualHover = 0.5, disturbance = false }: SimulateOptions = {}): any {
     const { worker, logs, state } = load();
     let disturbed = false;
     let right = [Math.cos(roll), 0, -Math.sin(roll)];
     let nose = [0, 1, 0], belly = cross(right, nose);
     let omega = [0, 0, 0], position = [0, 0, 0], velocity = [0, 0, 0];
     let airborne = false, maxHeight = 0, touchdownSpeed = Infinity;
-    const local = world => ({ x: dot(world, right), y: dot(world, nose), z: dot(world, belly) });
+    const local = (world: number[]): { x: number; y: number; z: number } =>
+        ({ x: dot(world, right), y: dot(world, nose), z: dot(world, belly) });
     const radius = 600000;
-    const vessel = {
+    const vessel: any = {
         id: 'hopper', body: { name: 'Kerbin', radius, gravitationalParameter: 9.81 * radius ** 2 },
         control: {}, attitude: {}, velocity: {},
     };
@@ -84,7 +103,7 @@ for (const options of [
     {}, { dt: 0.01, roll: Math.PI / 2 }, { dt: 0.04, authority: 1.5, roll: -0.7 },
     { actualHover: 0.55, authority: 6 },
     { disturbance: true },
-]) {
+] satisfies SimulateOptions[]) {
     test('grasshopper closed-loop hop ' + JSON.stringify(options), () => {
         const result = simulate(options);
         for (const phase of ['translate', 'brake', 'descend', 'landed'])
@@ -154,10 +173,10 @@ test('brake and descent request zero speed regardless of landing-position error'
         velocity: { localSurface: { x: 0, y: 0, z: 0 } }, control: {},
     };
     worker.flightTick({ vessel, universalTime: 0, deltaTime: 0.02 });
-    const targets = [];
+    const targets: number[] = [];
     for (const pid of horizontal) {
         const update = pid.update.bind(pid);
-        pid.update = (target, ...args) => { targets.push(target); return update(target, ...args); };
+        pid.update = (target: number, ...args: unknown[]): unknown => { targets.push(target); return update(target, ...args); };
     }
     vessel.situation = 'FLYING'; vessel.heightAboveTerrain = 33;
     vessel.longitude = -30 / 600000 * 180 / Math.PI; // Far west of the eastward goal.

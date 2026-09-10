@@ -1,20 +1,23 @@
 {
   "name": "klanker-build",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.7.0",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.18"
   },
   "scripts": {
     "make": "hereby",
     "bootstrap": "hereby bootstrap",
     "build": "hereby build",
     "tasks": "hereby --tasks",
-    "klanker": "node cli/klanker.mjs"
+    "typecheck": "tsc -p tsconfig.json",
+    "build:js": "node scripts/build-dist.ts",
+    "klanker": "node cli/klanker.ts"
   },
   "devDependencies": {
-    "esbuild": "0.28.2",
+    "@types/node": "26.5.0",
     "fflate": "0.8.2",
     "hereby": "1.15.2",
     "typescript": "5.9.3",

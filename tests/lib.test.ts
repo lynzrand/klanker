@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bundleModule } from '../cli/bundle.mjs';
+import { bundleModule } from '../cli/bundle.ts';
 
-const load = async name =>
+const load = async (name: string): Promise<any> =>
     import('data:text/javascript;base64,' + Buffer.from(await bundleModule(name)).toString('base64'));
 
 const vec = await load('vec');
@@ -10,7 +10,7 @@ const { PID } = await load('pid');
 const { AttitudeHold } = await load('attitude');
 const frame = await load('frame');
 
-const close = (a, b) => Math.abs(a - b) < 1e-12;
+const close = (a: number, b: number): boolean => Math.abs(a - b) < 1e-12;
 
 test('vector algebra', () => {
     assert.equal(vec.dot({ x: 1, y: 0, z: 0 }, { x: 0, y: 1, z: 0 }), 0);
@@ -33,12 +33,12 @@ test('PID regulates, rejects windup, and tracks', () => {
 
 test('attitude hold aims and damps', () => {
     const hold = new AttitudeHold({ kp: 1, kd: 0, maxInput: 0.25 });
-    const vessel = { attitude: { angularVelocity: { x: 0, y: 0, z: 0 } }, control: {} };
+    const vessel = { attitude: { angularVelocity: { x: 0, y: 0, z: 0 } }, control: {} as Record<string, number> };
     hold.aim({ vessel }, { x: 1, y: 0, z: 0 });
     assert.equal(vessel.control.yaw, 0.25);
     assert.equal(vessel.control.pitch, 0);
     const damping = new AttitudeHold({ kp: 0, kd: 1, maxInput: 0.25 });
-    const spinning = { attitude: { angularVelocity: { x: 0.5, y: 0, z: 0 } }, control: {} };
+    const spinning = { attitude: { angularVelocity: { x: 0.5, y: 0, z: 0 } }, control: {} as Record<string, number> };
     damping.aim({ vessel: spinning }, { x: 0, y: 1, z: 0 });
     assert.equal(spinning.control.pitch, 0.25);
 });

@@ -6,7 +6,7 @@ import xz from 'xz-decompress';
 
 const cache = resolve(import.meta.dirname, '..', '.cache', 'mono-runtime');
 const unityUrl = 'https://unity.bepinex.dev/corlibs/2019.4.18.zip';
-const monoPackages = [
+const monoPackages: [string, string, string, string][] = [
     ['microsoft-csharp4.0', 'Microsoft.CSharp', '4.0.0.0__b03f5f7f11d50a3a', 'dda91c0445082a41e0e116c61b23d585030a301dedbbec3892edd30b19a9006d'],
     ['system-componentmodel-composition4.0', 'System.ComponentModel.Composition', '4.0.0.0__b77a5c561934e089', 'f489fc0cac7eaad1ce05504b482f2dccf0b1eefe1104b1a6cfd4eda28a15843a'],
     ['system-servicemodel-internals0.0', 'System.ServiceModel.Internals', '0.0.0.0__b77a5c561934e089', '0e8d48bee2848c3365dff3e2b118b2bcf679ae3d91f6df9a7c5f449d1895d33d'],
@@ -14,13 +14,13 @@ const monoPackages = [
     ['system-enterpriseservices4.0', 'System.EnterpriseServices', '4.0.0.0__b03f5f7f11d50a3a', '93b6e44372333b2bf30a4fd274450b8f9921003ce8b3d332eb131bad57edb645'],
 ];
 
-async function pinnedDownload(url, sha256, fileName) {
+async function pinnedDownload(url: string, sha256: string, fileName: string): Promise<Buffer> {
     await mkdir(cache, { recursive: true });
     const path = join(cache, fileName);
-    let buffer;
+    let buffer: Buffer;
     try { buffer = await readFile(path); }
     catch (error) {
-        if (error.code !== 'ENOENT') throw error;
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
         console.log(`Downloading runtime support: ${url}`);
         const response = await fetch(url, { signal: AbortSignal.timeout(120_000) });
         if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
@@ -33,9 +33,9 @@ async function pinnedDownload(url, sha256, fileName) {
 }
 
 // Read only explicitly selected regular files, never extract archive paths to disk.
-export async function debFiles(buffer) {
+export async function debFiles(buffer: Buffer): Promise<Map<string, Uint8Array>> {
     if (buffer.subarray(0, 8).toString() !== '!<arch>\n') throw new Error('Invalid Debian archive');
-    let compressed;
+    let compressed: Buffer | undefined;
     for (let offset = 8; offset + 60 <= buffer.length;) {
         const name = buffer.subarray(offset, offset + 16).toString().trim();
         const size = Number(buffer.subarray(offset + 48, offset + 58).toString().trim());
@@ -45,12 +45,12 @@ export async function debFiles(buffer) {
         offset += 60 + size + size % 2;
     }
     if (!compressed) throw new Error('Debian package has no data.tar.xz');
-    const stream = new xz.XzReadableStream(new Blob([compressed]).stream());
+    const stream = new xz.XzReadableStream(new Blob([new Uint8Array(compressed)]).stream());
     const tar = Buffer.from(await new Response(stream).arrayBuffer());
-    const files = new Map();
-    let longName;
+    const files = new Map<string, Uint8Array>();
+    let longName: string | undefined;
     for (let offset = 0; offset + 512 <= tar.length;) {
-        const name = tar.subarray(offset, offset + 100).toString().split('\0')[0];
+        const name = tar.subarray(offset, offset + 100).toString().split('\0')[0]!;
         if (!name) break;
         const size = parseInt(tar.subarray(offset + 124, offset + 136).toString(), 8);
         if (!Number.isSafeInteger(size) || size < 0 || offset + 512 + size > tar.length)
@@ -67,7 +67,7 @@ export async function debFiles(buffer) {
     return files;
 }
 
-export async function copyMonoRuntime(pluginDirectory, licenseDirectory) {
+export async function copyMonoRuntime(pluginDirectory: string, licenseDirectory: string): Promise<void> {
     const unity = unzipSync(await pinnedDownload(unityUrl,
         '39ec690c3934b9de2d6814db0673ff1ecbb81aa746eb17c37c2ea6efab16e0b8', 'unity-2019.4.18.zip'));
     // Actual executable UnityMono libraries, NOT the compile-only reference pack.
@@ -88,7 +88,7 @@ export async function copyMonoRuntime(pluginDirectory, licenseDirectory) {
         await writeFile(join(pluginDirectory, `${assembly}.dll`), dll);
         await writeFile(join(licenseDirectory, `${assembly}-copyright.txt`), copyright);
     }
-    const notices = [
+    const notices: [string, string][] = [
         ['LICENSE', '3b40a54878b5ac2767a764bd082f8772ab27c03b9da9c7328c4c4935725556f7'],
         ['PATENTS.TXT', '4d764e3d098f8aad23f70f29e34165c7836b7e1cc49ced2a73b175edb89e4891'],
     ];

@@ -2,21 +2,21 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, readdir, lstat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { zipSync, unzipSync } from 'fflate';
+import { zipSync, unzipSync, type Zippable } from 'fflate';
 
 const root = resolve(import.meta.dirname, '..');
-const hash = data => createHash('sha256').update(data).digest('hex');
+const hash = (data: Uint8Array): string => createHash('sha256').update(data).digest('hex');
 const epoch = new Date('2000-01-01T00:00:00Z');
-function git(args) {
+function git(args: string[]): string {
     const result = spawnSync('git', args, { cwd: root, maxBuffer: 32 * 1024 * 1024 });
     if (result.error || result.status !== 0) throw result.error ?? new Error(result.stderr.toString());
     return result.stdout.toString();
 }
-function archive(files) {
+function archive(files: Record<string, Uint8Array>): Uint8Array {
     return zipSync(Object.fromEntries(Object.entries(files).sort(([a], [b]) => a.localeCompare(b))
-        .map(([path, data]) => [path, [data, { mtime: epoch }]])), { level: 6 });
+        .map(([path, data]) => [path, [data, { mtime: epoch }]])) as Zippable, { level: 6 });
 }
-async function collect(directory, prefix, files) {
+async function collect(directory: string, prefix: string, files: Record<string, Uint8Array>): Promise<void> {
     if ((await lstat(directory)).isSymbolicLink()) throw new Error('Linked package input: ' + directory);
     for (const entry of await readdir(directory, { withFileTypes: true })) {
         if (entry.isSymbolicLink()) throw new Error('Linked package input: ' + entry.name);
@@ -26,21 +26,29 @@ async function collect(directory, prefix, files) {
     }
 }
 
+export interface SourceSnapshot {
+    files: Record<string, Buffer>;
+    fingerprint: string;
+    commit: string;
+    dirty: boolean;
+}
+
 // Snapshot actual build inputs, including uncommitted work, never ignored local files.
 // Explicit roots avoid accidentally including unrelated untracked files in releases.
-export async function snapshotSource() {
+export async function snapshotSource(): Promise<SourceSnapshot> {
     const candidates = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean);
-    const files = {};
+    const files: Record<string, Buffer> = {};
     for (const path of [...new Set(candidates)].sort()) {
         if (!/^(GameData|src|scripts|tests|docs|cli|lib)\//.test(path) &&
             !['README.md', 'LICENSE', '.gitignore', 'package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml',
-                'Herebyfile.mjs', 'herebyfile.mjs', 'Klanker.sln', 'global.json', 'Directory.Build.props',
-                'Directory.Packages.props', 'NuGet.Config', 'nuget.config', 'klanker.local.example.json'].includes(path)) continue;
-        if (/(^|\/)(\.env(?:\..*)?|klanker\.local\.json|bin|obj|node_modules|\.cache|\.nuget)(\/|$)/i.test(path))
+                'Herebyfile.ts', 'herebyfile.ts', 'tsconfig.json', 'tsconfig.build.json', 'Klanker.sln', 'global.json',
+                'Directory.Build.props', 'Directory.Packages.props', 'NuGet.Config', 'nuget.config',
+                'klanker.local.example.json'].includes(path)) continue;
+        if (/(^|\/)(\.env(?:\..*)?|klanker\.local\.json|bin|obj|dist|node_modules|\.cache|\.nuget)(\/|$)/i.test(path))
             throw new Error('Private/generated path in source inputs: ' + path);
         let info;
         try { info = await lstat(join(root, path)); }
-        catch (error) { if (error.code === 'ENOENT') continue; throw error; }
+        catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue; throw error; }
         if (!info.isFile() || info.isSymbolicLink()) throw new Error('Non-regular source input: ' + path);
         files[path] = await readFile(join(root, path));
     }
@@ -49,19 +57,25 @@ export async function snapshotSource() {
         dirty: git(['status', '--porcelain', '--untracked-files=normal']).trim().length > 0 };
 }
 
-async function notices(files) {
-    const assets = JSON.parse(await readFile(join(root, 'src/Klanker/obj/project.assets.json'), 'utf8'));
-    const provenance = {};
+interface NugetAssets {
+    targets: Record<string, Record<string, { runtime?: Record<string, unknown> }>>;
+    libraries: Record<string, { type?: string; sha512?: string; path?: string }>;
+    packageFolders: Record<string, string>;
+}
+
+async function notices(files: Record<string, Uint8Array>): Promise<Record<string, unknown>> {
+    const assets = JSON.parse(await readFile(join(root, 'src/Klanker/obj/project.assets.json'), 'utf8')) as NugetAssets;
+    const provenance: Record<string, unknown> = {};
     for (const [id, target] of Object.entries(Object.values(assets.targets)[0])) {
         if (!target.runtime && !id.includes('ClearScript.V8.Native')) continue;
         const library = assets.libraries[id];
-        if (library.type !== 'package') continue;
+        if (!library || library.type !== 'package') continue;
         provenance[id] = library.sha512;
-        let directory;
+        let directory: string | undefined;
         for (const folder of Object.keys(assets.packageFolders)) {
-            const candidate = join(folder, library.path);
+            const candidate = join(folder, library.path ?? '');
             try { if ((await lstat(candidate)).isDirectory()) { directory = candidate; break; } }
-            catch (error) { if (error.code !== 'ENOENT') throw error; }
+            catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
         }
         const prefix = 'GameData/Klanker/Licenses/NuGet/' + id.replace('/', '-');
         if (directory) {
@@ -79,7 +93,7 @@ async function notices(files) {
             const contents = unzipSync(data);
             for (const path of Object.keys(target.runtime ?? {})) {
                 if (!path.endsWith('.dll')) continue;
-                const shipped = files['GameData/Klanker/Plugins/' + path.split('/').at(-1)];
+                const shipped = files['GameData/Klanker/Plugins/' + path.split('/').at(-1)!];
                 if (!shipped || !contents[path] || hash(shipped) !== hash(contents[path]))
                     throw new Error('Notice archive runtime differs from shipped DLL: ' + id);
             }
@@ -95,14 +109,14 @@ async function notices(files) {
     return provenance;
 }
 
-export async function packageRelease(before) {
+export async function packageRelease(before: SourceSnapshot | undefined): Promise<string> {
     const after = await snapshotSource();
     if (!before || before.fingerprint !== after.fingerprint || before.commit !== after.commit)
         throw new Error('Source changed during build/tests. Run pnpm make package again.');
     const version = before.files['src/Klanker/Klanker.csproj'].toString().match(/<Version>([^<]+)<\/Version>/)?.[1];
     if (!version || !/^[0-9A-Za-z.-]+$/.test(version)) throw new Error('Invalid project version.');
     const name = `Klanker-${version}-${before.commit.slice(0, 8)}-${before.fingerprint.slice(0, 8)}`;
-    const files = {};
+    const files: Record<string, Uint8Array> = {};
     await collect(join(root, 'build/GameData/Klanker'), 'GameData/Klanker', files);
     for (const [path, data] of Object.entries(before.files))
         if (path.startsWith('docs/') || path === 'README.md' || path === 'LICENSE') files[path] = data;
@@ -150,10 +164,10 @@ See manifest.json for file hashes and dependency provenance.
     await mkdir(output, { recursive: true });
     const path = join(output, name + '.zip');
     // Repeat packaging of unchanged inputs is allowed only when the result is identical.
-    for (const [target, data] of [[path, zip], [path + '.sha256', Buffer.from(hash(zip) + '  ' + name + '.zip\n')]]) {
+    for (const [target, data] of [[path, zip], [path + '.sha256', Buffer.from(hash(zip) + '  ' + name + '.zip\n')]] as [string, Uint8Array][]) {
         try { await writeFile(target, data, { flag: 'wx' }); }
         catch (error) {
-            if (error.code !== 'EEXIST' || hash(await readFile(target)) !== hash(data)) throw error;
+            if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || hash(await readFile(target)) !== hash(data)) throw error;
         }
     }
     console.log(`Package: ${path}\nBytes: ${zip.length}\nSHA256: ${hash(zip)}`);

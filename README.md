@@ -1,29 +1,69 @@
 # Klanker
 
-A suspiciously modern piece of flight software for Kerbal Space Program.
+**Write your autopilot in TypeScript. Run it inside Kerbal Space Program.**
 
-Klanker runs JavaScript inside KSP using V8. Write a `flightTick` handler, read
-your vessel's telemetry, and control its throttle, pitch, yaw, and roll. Edit
-the script and reload it without leaving flight.
+Klanker embeds a V8 engine in KSP and runs your code on every physics tick. Read
+your vessel's telemetry, command its throttle, attitude, staging, and action
+groups, and redeploy a new script without leaving flight. Think of it as a kOS
+for people who write JavaScript — a suspiciously modern piece of flight software
+for a 2011 game.
 
-Inspired by [ArmorControl](https://github.com/Armo00/ArmorControl),
-by [Armo00](https://github.com/Armo00).
+```ts
+// ascent.ts — full throttle below a 100 km apoapsis, then cut it.
+import { PID } from 'klanker';
 
-Workers now belong to command pods and probe cores. Each part keeps its own
-script assignment; the current control point runs its worker while the others
-wait on standby. Scripts and explicit `ctx.storage` JSON data are stored with
-the craft/save; ordinary JavaScript variables still reset with the runtime.
-Part APIs, remote connections, and MechJeb guidance bindings
-are still future work. Try this early build in a test save.
+const worker: Klanker.Worker = {
+    flightTick({ vessel }) {
+        vessel.control.throttle = vessel.orbit.apoapsis < 100_000 ? 1 : 0;
+    },
+};
 
-## Try it
+export default worker;
+```
 
-You need KSP **1.12.5**, ModuleManager **4.2.3**, and MechJeb **2.14.3**
-(CKAN version `2.14.3.0`). ModuleManager adds computers to command parts.
-MechJeb is a required dependency for now, even though the PoC does not call its
-guidance APIs. Newer MechJeb releases are deliberately not the target.
+```sh
+pnpm klanker deploy ascent.ts --to guidance --run
+pnpm klanker logs -f --to guidance
+```
 
-To build from source, install Node.js 22+, pnpm, and the .NET 9 SDK. Then run:
+Deploy bundles the file and everything it imports into one self-contained
+module, sends it over a loopback bridge to the running game, and starts it. Edit,
+deploy again — no reload, no restart, no alt-tab.
+
+## What you get
+
+- **V8 in the flight loop.** One shared V8 runtime per scene, one isolated
+  context per computer, warmed at scene load. Handlers are synchronous and get a
+  20 ms budget, with a watchdog that interrupts runaway loops.
+- **Computers on parts.** Command pods and probe cores carry their own script
+  assignment, run setting, storage, and identity. Only the active control point
+  runs; the rest wait on standby and resume where they left off.
+- **TypeScript first.** The standard library (`vec`, `pid`, `attitude`, `frame`,
+  `mechjeb`) ships as TypeScript, so `import { PID } from 'klanker'` gives full
+  editor completion and `pnpm klanker check` type-checks against the real host
+  API before you launch.
+- **Persistence that survives the save.** `ctx.storage` is JSON stored on the
+  part, so counters and state live through quicksaves, reloads, and script
+  replacement.
+- **Live telemetry and control.** Vessel, orbit, body, resources, parts and
+  engines; throttle, pitch/yaw/roll, RCS translation, and SAS/RCS/gear/brakes/
+  lights/abort.
+- **An experimental MechJeb bridge.** Drive SmartASS, maneuver nodes, and landing
+  guidance when MechJeb is on the vessel.
+- **A scriptable CLI.** `ping`, `ls`, `build`, `check`, `deploy`, `restart`,
+  `stop`, `alias`, `state`, and streaming `logs` over a token-guarded loopback
+  socket.
+
+## Install
+
+You need KSP **1.12.5**, [ModuleManager](https://github.com/sarbian/ModuleManager)
+**4.2.3**, and MechJeb **2.14.3** (CKAN `2.14.3.0`). ModuleManager adds the
+computer to command parts; MechJeb is a required dependency for now. Newer
+MechJeb releases are deliberately not the target.
+
+From a release ZIP, copy `GameData/Klanker` into your KSP `GameData` and keep its
+subdirectories intact. To build from source you also need Node.js 22+, pnpm, and
+the .NET 9 SDK:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -32,46 +72,69 @@ pnpm make configure --ksp "path/to/KSP"
 pnpm make deploy --configuration Release
 ```
 
-Close KSP before deploying. Give `configure` the installation root containing
-`GameData`; it saves the path in a git-ignored local config. Builds fetch their
-dependencies online and never use your installation as a source of libraries.
-Deployment preserves edited workers and backs up the previous Klanker folder.
+Close KSP before deploying. Builds fetch their own dependencies and never read
+libraries out of your installation; deployment preserves edited workers and backs
+up the previous Klanker folder.
 
-If installing manually, copy `build/GameData/Klanker` into KSP's `GameData`.
-Keep its subdirectories intact.
+## Hello, autopilot
 
-1. In the editor, right-click a pod or probe core and choose **Klanker worker…**.
-   Enter `observe.js` and click **Assign / reload file**.
+1. In the editor, right-click a pod or probe core and choose **Klanker worker…**,
+   enter `observe.js`, and click **Assign / reload file**.
 2. Enable **Run when active**, save the craft, and launch. The successful-tick
-   count should rise without changing controls. **F8** toggles the window in flight.
-3. Assign `apoapsis.js` for a simple throttle controller. Enable SAS and launch
-   manually; it uses full throttle below 100 km apoapsis and cuts it above that.
-   It does not steer, stage, or circularize.
+   count rises without touching the controls. **F8** toggles the window in flight.
+3. Try `apoapsis.js` for a throttle controller, or the [Grasshopper
+   hopper](docs/grasshopper.md) for a full climb-and-land example.
 
-## What has been tested?
+From the CLI instead:
 
-The original flight-only PoC was exercised in Windows KSP 1.12.5, including
-script execution, faults, watchdog interruption, and manual stop. The new
-part-owned computers pass automated persistence and control-handoff tests using
-host fixtures, but still need an in-game editor/save/load check. Follow the
-[computer test checklist](docs/workers.md#testing-command-part-computers).
+```sh
+pnpm klanker ls                                  # what's flying
+pnpm klanker deploy my-ascent.ts --to guidance --run
+pnpm klanker logs -f --to guidance
+```
 
-The revised [Grasshopper hopper](docs/grasshopper.md) was reported working in
-Windows KSP on 2026-09-09, after switching descent to horizontal-velocity
-cancellation with PID control. It remains a craft-dependent tuning example.
+See the [worker guide](docs/workers.md) for the API, [standard
+library](docs/libraries.md) for the modules, and the [CLI guide](docs/cli.md) for
+the full command list.
 
-Linux x64 and macOS x64 libraries are included, but in-game testing on those
-platforms is still outstanding. This is not a general-purpose autopilot or a
-sandbox for untrusted scripts.
+## The packages
 
-## More
+Klanker ships two npm packages:
 
-- [Writing workers](docs/workers.md): the current API, examples, and fault behavior.
-- [Worker libraries](docs/libraries.md): vector, PID, attitude, frame, and MechJeb modules.
-- [CLI](docs/cli.md): deploy and control workers on a running game.
-- [Development](docs/development.md): build tasks, deployment, dependencies, and checks.
-- [Design notes](docs/design.md): future plans, not features available today.
-- [Original proposal](docs/proposal.md): the full reference design.
+- **`klanker`** — the worker standard library. Import `klanker`, `klanker/pid`,
+  `klanker/frame`, and friends from any TypeScript project; the sources are
+  TypeScript, so your editor and bundler handle them directly.
+- **`klanker-cli`** — the `klanker` command that bundles and deploys workers.
 
-Klanker is licensed under [MPL 2.0](LICENSE). Bundled dependencies carry their
-own notices in `GameData/Klanker/Licenses` in the build output.
+Inside this repository, `pnpm klanker` runs the CLI from source.
+
+## Project status
+
+Early. It runs, it flies, and it will bite you if you trust it too far.
+
+- Script execution, faults, watchdog interruption, and manual stop have been
+  exercised in Windows KSP 1.12.5.
+- Part-owned computers pass automated persistence, ownership, and control-handoff
+  tests with host fixtures; an in-game editor/save/load pass is still pending
+  ([checklist](docs/workers.md#testing-command-part-computers)).
+- The [Grasshopper hopper](docs/grasshopper.md) was reported working in Windows
+  KSP on 2026-09-09; it remains a craft-specific tuning example.
+- Linux x64 and macOS x64 libraries are included, but in-game testing on those
+  platforms is still outstanding.
+- This is not a general-purpose autopilot, and it is **not** a sandbox for
+  untrusted scripts. Use test saves and scripts you trust.
+
+## Documentation
+
+- [Writing workers](docs/workers.md) — API, examples, faults, storage.
+- [Standard library](docs/libraries.md) — vector, PID, attitude, frame, MechJeb modules.
+- [CLI](docs/cli.md) — deploy and control workers on a running game.
+- [Development](docs/development.md) — build tasks, deployment, dependencies, checks.
+- [Design notes](docs/design.md) — future plans, not features available today.
+- [Original proposal](docs/proposal.md) — the full reference design.
+
+Inspired by [ArmorControl](https://github.com/Armo00/ArmorControl), by
+[Armo00](https://github.com/Armo00).
+
+Klanker is licensed under [MPL 2.0](LICENSE). Bundled dependencies carry their own
+notices in `GameData/Klanker/Licenses` in the build output.

@@ -1,0 +1,25 @@
+{
+  "name": "klanker-cli",
+  "version": "0.1.0",
+  "description": "Deploy and control Klanker flight workers on a running Kerbal Space Program game.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "bin": {
+    "klanker": "./dist/klanker.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node ../scripts/build-dist.ts",
+    "prepack": "node ../scripts/build-dist.ts"
+  },
+  "dependencies": {
+    "esbuild": "0.28.2",
+    "klanker": "workspace:*",
+    "typescript": "5.9.3"
+  }
+}

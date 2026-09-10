@@ -10,7 +10,16 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const cacheRoot = join(repositoryRoot, '.cache');
 export const kspRoot = join(cacheRoot, 'ksp', '1.12.5');
 
-const archives = [
+interface Archive {
+    name: string;
+    fileName: string;
+    sha256: string;
+    destination: string;
+    requiredFiles: string[];
+    sources: () => Promise<string[]>;
+}
+
+const archives: Archive[] = [
     {
         name: 'stripped KSP 1.12.5 definitions',
         fileName: 'ksp-1.12.5-5e23ea299dbd7d4219a7b27af2e805b5242de4c2.zip',
@@ -37,7 +46,7 @@ const archives = [
     },
 ];
 
-async function mechJebSources() {
+async function mechJebSources(): Promise<string[]> {
     const item = 'MechJeb2-2.14.3.0';
     const file = '65D2DF5E-MechJeb2-2.14.3.0.zip';
     const sources = [
@@ -48,7 +57,12 @@ async function mechJebSources() {
     try {
         const response = await fetch(`https://archive.org/metadata/${item}`);
         if (response.ok) {
-            const metadata = await response.json();
+            const metadata = await response.json() as {
+                d1?: string;
+                d2?: string;
+                workable_servers?: string[];
+                dir: string;
+            };
             const servers = [metadata.d1, metadata.d2, ...(metadata.workable_servers ?? [])];
             for (const server of servers) {
                 if (server) {
@@ -57,22 +71,22 @@ async function mechJebSources() {
             }
         }
     } catch (error) {
-        console.warn(`Could not resolve Internet Archive storage nodes: ${error.message}`);
+        console.warn(`Could not resolve Internet Archive storage nodes: ${(error as Error).message}`);
     }
 
     return [...new Set(sources)];
 }
 
-function hasRequiredFiles(archive) {
+function hasRequiredFiles(archive: Archive): boolean {
     return archive.requiredFiles.every((file) => existsSync(join(archive.destination, file)));
 }
 
-function digest(buffer) {
+function digest(buffer: Buffer): string {
     return createHash('sha256').update(buffer).digest('hex');
 }
 
-async function download(archive, archivePath) {
-    const failures = [];
+async function download(archive: Archive, archivePath: string): Promise<Buffer> {
+    const failures: string[] = [];
 
     for (const source of await archive.sources()) {
         try {
@@ -91,14 +105,14 @@ async function download(archive, archivePath) {
             await writeFile(archivePath, buffer);
             return buffer;
         } catch (error) {
-            failures.push(`${source}: ${error.message}`);
+            failures.push(`${source}: ${(error as Error).message}`);
         }
     }
 
     throw new Error(`Unable to download ${archive.name}:\n${failures.join('\n')}`);
 }
 
-async function readOrDownload(archive) {
+async function readOrDownload(archive: Archive): Promise<Buffer> {
     const archivePath = join(cacheRoot, 'downloads', archive.fileName);
     await mkdir(dirname(archivePath), { recursive: true });
 
@@ -117,7 +131,7 @@ async function readOrDownload(archive) {
     return download(archive, archivePath);
 }
 
-async function extract(buffer, destination) {
+async function extract(buffer: Buffer, destination: string): Promise<void> {
     const destinationRoot = resolve(destination);
     const entries = unzipSync(buffer);
 
@@ -139,7 +153,7 @@ async function extract(buffer, destination) {
     }
 }
 
-export async function bootstrap() {
+export async function bootstrap(): Promise<string> {
     for (const archive of archives) {
         if (hasRequiredFiles(archive)) {
             continue;
@@ -161,4 +175,3 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     await bootstrap();
     console.log(kspRoot);
 }
-

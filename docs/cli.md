@@ -13,7 +13,9 @@ ephemeral port and a random per-session token, written to
 Linux, `%APPDATA%\klanker\bridge.json` on Windows). The file is deleted when the
 scene unloads. No configuration is needed.
 
-Run the CLI through the repo's pnpm script:
+In this repository, run the CLI from source with the pnpm script. The same
+command ships as the `klanker-cli` package, whose `klanker` bin can be installed
+globally (`npm install -g klanker-cli`) and invoked as `klanker`:
 
 ```sh
 pnpm klanker ls
@@ -43,10 +45,12 @@ klanker logs [-f] [--to <alias>]     Stream worker logs (Ctrl-C to stop).
 ```
 
 `<file>` may be TypeScript (`.ts`) or JavaScript. `build`/`deploy` bundle it
-with esbuild, inlining local, npm, and `klanker:*` imports into one module; the
-deployed file is always named `<name>.js`. `check` runs the TypeScript compiler
-against the host API declaration and the libraries, so you catch mistakes
-before deploying. See [Worker libraries](libraries.md).
+with esbuild, inlining local, npm, and standard-library imports into one module;
+the deployed file is always named `<name>.js`. The library can be imported either
+through the `klanker:<name>` scheme or as the `klanker` package (`klanker` or
+`klanker/<name>`). `check` runs the TypeScript compiler against the host API
+declaration and the libraries, so you catch mistakes before deploying. See
+[Worker libraries](libraries.md).
 
 Aliases are human selectors and need not be unique; if one matches several
 actors, the CLI reports the ambiguity and you should use the `workerId` from

@@ -3,19 +3,19 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 const localConfigPath = resolve(import.meta.dirname, '..', 'klanker.local.json');
 
-async function exists(path) {
+async function exists(path: string): Promise<boolean> {
     try { await access(path); return true; }
-    catch (error) { if (error.code === 'ENOENT') return false; throw error; }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
 }
 
-function requireInside(parent, path) {
+function requireInside(parent: string, path: string): void {
     const child = relative(parent, path);
     if (!child || isAbsolute(child) || child === '..' || child.startsWith(`..${sep}`)) {
         throw new Error(`Deployment path must be inside ${parent}: ${path}`);
     }
 }
 
-async function rejectLinks(path) {
+async function rejectLinks(path: string): Promise<void> {
     const info = await lstat(path);
     if (info.isSymbolicLink()) throw new Error(`Deployment does not follow symlinks or junctions: ${path}`);
     if (info.isDirectory()) {
@@ -23,7 +23,7 @@ async function rejectLinks(path) {
     }
 }
 
-async function validateKsp(kspPath) {
+async function validateKsp(kspPath: string | undefined): Promise<string> {
     if (!kspPath) throw new Error('Locate your KSP installation: pnpm make configure --ksp "path/to/KSP"');
     const root = await realpath(resolve(kspPath));
     const gameData = join(root, 'GameData');
@@ -36,7 +36,12 @@ async function validateKsp(kspPath) {
     return root;
 }
 
-export async function deploy(kspPath, source = resolve(import.meta.dirname, '..', 'build', 'GameData', 'Klanker')) {
+export interface DeployResult {
+    destination: string;
+    backup: string | null;
+}
+
+export async function deploy(kspPath: string | undefined, source = resolve(import.meta.dirname, '..', 'build', 'GameData', 'Klanker')): Promise<DeployResult> {
     const root = await validateKsp(kspPath);
     const gameData = join(root, 'GameData');
     if (!(await exists(join(source, 'Plugins', 'Klanker.dll')))) throw new Error('Build Klanker before deploying.');
@@ -54,7 +59,7 @@ export async function deploy(kspPath, source = resolve(import.meta.dirname, '..'
 
     // Stage and back up outside GameData so KSP cannot load duplicate assemblies.
     const staging = await mkdtemp(join(root, '.klanker-stage-'));
-    const backup = join(backups, staging.split(sep).at(-1));
+    const backup = join(backups, staging.split(sep).at(-1)!);
     requireInside(root, staging);
     requireInside(backups, backup);
     let movedOld = false;
@@ -90,7 +95,7 @@ export async function deploy(kspPath, source = resolve(import.meta.dirname, '..'
     }
 }
 
-function pathArgument(args) {
+function pathArgument(args: string[]): string | undefined {
     const index = args.indexOf('--ksp');
     if (index === -1) return undefined;
     const path = args[index + 1];
@@ -98,15 +103,15 @@ function pathArgument(args) {
     return path;
 }
 
-async function readConfig(path) {
+async function readConfig(path: string): Promise<Record<string, unknown>> {
     if (!(await exists(path))) return {};
-    const config = JSON.parse(await readFile(path, 'utf8'));
+    const config = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>;
     if (config === null || typeof config !== 'object' || Array.isArray(config))
         throw new Error(`${path} must contain a JSON object.`);
     return config;
 }
 
-export async function deploymentPath(args = process.argv.slice(2), configPath = localConfigPath) {
+export async function deploymentPath(args: string[] = process.argv.slice(2), configPath = localConfigPath): Promise<string> {
     const override = pathArgument(args);
     if (override) return resolve(override);
     const config = await readConfig(configPath);
@@ -115,7 +120,7 @@ export async function deploymentPath(args = process.argv.slice(2), configPath = 
     return resolve(dirname(configPath), config.kspPath);
 }
 
-export async function configureLocal(args = process.argv.slice(2), configPath = localConfigPath) {
+export async function configureLocal(args: string[] = process.argv.slice(2), configPath = localConfigPath): Promise<void> {
     const root = await validateKsp(pathArgument(args));
     const config = await readConfig(configPath);
     config.kspPath = root;
@@ -123,6 +128,6 @@ export async function configureLocal(args = process.argv.slice(2), configPath = 
     console.log(`Saved KSP path in ${configPath}: ${root}`);
 }
 
-export async function deployFromArguments() {
+export async function deployFromArguments(): Promise<DeployResult> {
     return deploy(await deploymentPath());
 }
