@@ -38,8 +38,9 @@ export default {
 
 Telemetry includes vessel identity and situation, mass in kilograms, location,
 surface/orbital speeds, orbit elements, body properties, velocity components,
-and resource totals. Only `vessel.control.throttle` (0..1) and
-`pitch`/`yaw`/`roll` (-1..1) are writable.
+and resource totals. Writable state is `vessel.control.throttle` (0..1),
+`pitch`/`yaw`/`roll` (-1..1), the RCS `translation` axes (-1..1), and the
+`sas`/`rcs`/`gear`/`brakes`/`lights`/`abort` action groups.
 
 These are C# views exposed through ClearScript, not raw KSP objects or plain
 JavaScript records. Read properties directly; copy the fields you want into an
@@ -60,6 +61,12 @@ Reads use the live vessel state. Writes are buffered until the handler returns
 successfully; reading a control after writing it returns the buffered value.
 Only controls you write are applied. If the handler throws or exceeds its time
 budget, its buffered writes are discarded.
+
+Action-group assignments use the same buffer, so a failed tick leaves
+`sas`/`rcs`/`gear`/`brakes`/`lights`/`abort` unchanged. `vessel.stage()` is a
+discrete action instead: it is queued and run only after the handler returns
+successfully, because an activated stage cannot be rolled back. A handler that
+throws or times out does not stage.
 
 Nonfinite numbers and values outside the allowed range cause a fault rather
 than being clamped. `async` handlers and returned promises are rejected. Vessel

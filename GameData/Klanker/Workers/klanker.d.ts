@@ -54,6 +54,11 @@ declare namespace Klanker {
         /** The only writable vessel properties. */
         readonly control: ControlView;
         readonly attitude: AttitudeView;
+        /**
+         * Activates the next stage. Queued, not buffered, and run only after the
+         * handler returns successfully; a failed tick does not stage.
+         */
+        stage(): void;
     }
 
     interface OrbitView {
@@ -150,6 +155,26 @@ declare namespace Klanker {
         yaw: number;
         /** Finite number, -1..1. */
         roll: number;
+        /**
+         * Action-group toggles. Applied on successful handler completion, so a
+         * failed tick leaves the group unchanged. Reads return the pending value
+         * if written this tick, otherwise the live KSP group state.
+         */
+        sas: boolean;
+        rcs: boolean;
+        gear: boolean;
+        brakes: boolean;
+        lights: boolean;
+        abort: boolean;
+        /** RCS translation axes, -1..1, buffered like the rotation axes. */
+        readonly translation: TranslationView;
+    }
+
+    interface TranslationView {
+        /** Finite number, -1..1. Reads return the pending value if written this tick. */
+        x: number;
+        y: number;
+        z: number;
     }
 }
 

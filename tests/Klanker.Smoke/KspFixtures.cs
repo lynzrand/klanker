@@ -116,12 +116,21 @@ public sealed class Vessel
     public Part? ReferencePart;
     public double altitude = 100, verticalSpeed, srfSpeed;
     public Orbit orbit = new();
+    public ActionGroupList ActionGroups = new();
     public event Action<FlightCtrlState>? OnFlyByWire;
     public int SubscriberCount => OnFlyByWire?.GetInvocationList().Length ?? 0;
     public Part? GetReferenceTransformPart() => ReferencePart;
     public void Tick(FlightCtrlState controls) => OnFlyByWire?.Invoke(controls);
 }
-public sealed class FlightCtrlState { public float mainThrottle, pitch, yaw, roll; }
+public enum KSPActionGroup { None, Stage, Gear, Light, RCS, SAS, Brakes, Abort, Custom01 }
+public sealed class ActionGroupList
+{
+    private readonly Dictionary<KSPActionGroup, bool> states = new();
+    public bool this[KSPActionGroup group] { get => states.TryGetValue(group, out var value) && value; set => states[group] = value; }
+    public void SetGroup(KSPActionGroup group, bool value) => states[group] = value;
+    public void ToggleGroup(KSPActionGroup group) => states[group] = !this[group];
+}
+public sealed class FlightCtrlState { public float mainThrottle, pitch, yaw, roll, X, Y, Z; }
 public static class FlightGlobals { public static Vessel? ActiveVessel; }
 public static class HighLogic { public static bool LoadedSceneIsFlight, LoadedSceneIsEditor; }
 public static class KSPUtil { public static string ApplicationRootPath = ""; }
@@ -132,4 +141,14 @@ public enum ScreenMessageStyle { UPPER_CENTER }
 public static class ScreenMessages
 {
     public static void PostScreenMessage(string text, float time, ScreenMessageStyle style) { }
+}
+
+namespace KSP.UI.Screens
+{
+    public sealed class StageManager
+    {
+        public static StageManager Instance = new();
+        public int Activations;
+        public static void ActivateNextStage() => Instance.Activations++;
+    }
 }

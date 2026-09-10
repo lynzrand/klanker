@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.ClearScript;
 
 namespace Klanker.Runtime;
@@ -8,6 +9,7 @@ internal sealed class TickBinding
 {
     private Vessel? vessel;
     private FlightCtrlState? controls;
+    private readonly List<Action> pendingActions = new();
     internal Vessel Vessel => vessel ?? throw new InvalidOperationException("Vessel access requires flightTick.");
     internal FlightCtrlState Controls => controls ?? throw new InvalidOperationException("Control access requires flightTick.");
     internal void Bind(Vessel activeVessel, FlightCtrlState activeControls)
@@ -18,7 +20,19 @@ internal sealed class TickBinding
         vessel = activeVessel;
         controls = activeControls;
     }
-    internal void Clear() { vessel = null; controls = null; }
+    // Discrete actions cannot be rolled back like buffered values, so they run
+    // only after the handler returns and its buffered controls are committed.
+    internal void Queue(Action action)
+    {
+        _ = Vessel;
+        pendingActions.Add(action);
+    }
+    internal void RunActions()
+    {
+        foreach (var action in pendingActions) action();
+        pendingActions.Clear();
+    }
+    internal void Clear() { vessel = null; controls = null; pendingActions.Clear(); }
 }
 
 public sealed class FlightContext
@@ -30,7 +44,11 @@ public sealed class FlightContext
         binding.Bind(vessel, controls);
         Vessel.Control.Clear();
     }
-    internal void Commit() => Vessel.Control.Apply();
+    internal void Commit()
+    {
+        Vessel.Control.Apply();
+        binding.RunActions();
+    }
     internal void End() { Vessel.Control.Clear(); binding.Clear(); }
     [ScriptMember("vessel")] public VesselView Vessel { get; }
     private ScriptObject storage = null!;
@@ -72,6 +90,8 @@ public sealed class VesselView
     [ScriptMember("resources")] public ResourcesView Resources { get; }
     [ScriptMember("control")] public ControlView Control { get; }
     [ScriptMember("attitude")] public AttitudeView Attitude { get; }
+    // Queued, not buffered: the next stage fires only after a successful tick.
+    [ScriptMember("stage")] public void Stage() => binding.Queue(() => KSP.UI.Screens.StageManager.ActivateNextStage());
 }
 
 public sealed class OrbitView
@@ -176,7 +196,12 @@ public sealed class ControlView
 {
     private readonly TickBinding binding;
     private double? throttle, pitch, yaw, roll;
-    internal ControlView(TickBinding binding) => this.binding = binding;
+    private bool? sas, rcs, gear, brakes, lights, abort;
+    internal ControlView(TickBinding binding)
+    {
+        this.binding = binding;
+        Translation = new TranslationView(binding);
+    }
     [ScriptMember("throttle")] public double Throttle
     {
         get { var controls = binding.Controls; return throttle ?? controls.mainThrottle; }
@@ -197,6 +222,37 @@ public sealed class ControlView
         get { var controls = binding.Controls; return roll ?? controls.roll; }
         set { _ = binding.Controls; Validate(value, -1); roll = value; }
     }
+    [ScriptMember("sas")] public bool Sas
+    {
+        get { var vessel = binding.Vessel; return sas ?? vessel.ActionGroups[KSPActionGroup.SAS]; }
+        set { _ = binding.Vessel; sas = value; }
+    }
+    [ScriptMember("rcs")] public bool Rcs
+    {
+        get { var vessel = binding.Vessel; return rcs ?? vessel.ActionGroups[KSPActionGroup.RCS]; }
+        set { _ = binding.Vessel; rcs = value; }
+    }
+    [ScriptMember("gear")] public bool Gear
+    {
+        get { var vessel = binding.Vessel; return gear ?? vessel.ActionGroups[KSPActionGroup.Gear]; }
+        set { _ = binding.Vessel; gear = value; }
+    }
+    [ScriptMember("brakes")] public bool Brakes
+    {
+        get { var vessel = binding.Vessel; return brakes ?? vessel.ActionGroups[KSPActionGroup.Brakes]; }
+        set { _ = binding.Vessel; brakes = value; }
+    }
+    [ScriptMember("lights")] public bool Lights
+    {
+        get { var vessel = binding.Vessel; return lights ?? vessel.ActionGroups[KSPActionGroup.Light]; }
+        set { _ = binding.Vessel; lights = value; }
+    }
+    [ScriptMember("abort")] public bool Abort
+    {
+        get { var vessel = binding.Vessel; return abort ?? vessel.ActionGroups[KSPActionGroup.Abort]; }
+        set { _ = binding.Vessel; abort = value; }
+    }
+    [ScriptMember("translation")] public TranslationView Translation { get; }
     private static void Validate(double value, double minimum)
     {
         if (double.IsNaN(value) || double.IsInfinity(value) || value < minimum || value > 1)
@@ -209,8 +265,52 @@ public sealed class ControlView
         if (pitch.HasValue) controls.pitch = (float)pitch.Value;
         if (yaw.HasValue) controls.yaw = (float)yaw.Value;
         if (roll.HasValue) controls.roll = (float)roll.Value;
+        var vessel = binding.Vessel;
+        if (sas.HasValue) vessel.ActionGroups.SetGroup(KSPActionGroup.SAS, sas.Value);
+        if (rcs.HasValue) vessel.ActionGroups.SetGroup(KSPActionGroup.RCS, rcs.Value);
+        if (gear.HasValue) vessel.ActionGroups.SetGroup(KSPActionGroup.Gear, gear.Value);
+        if (brakes.HasValue) vessel.ActionGroups.SetGroup(KSPActionGroup.Brakes, brakes.Value);
+        if (lights.HasValue) vessel.ActionGroups.SetGroup(KSPActionGroup.Light, lights.Value);
+        if (abort.HasValue) vessel.ActionGroups.SetGroup(KSPActionGroup.Abort, abort.Value);
+        Translation.Apply();
     }
-    internal void Clear() { throttle = null; pitch = null; yaw = null; roll = null; }
+    internal void Clear() { throttle = null; pitch = null; yaw = null; roll = null; sas = null; rcs = null; gear = null; brakes = null; lights = null; abort = null; Translation.Clear(); }
+}
+
+// RCS translation axes, -1..1, buffered like the rotation axes.
+public sealed class TranslationView
+{
+    private readonly TickBinding binding;
+    private double? x, y, z;
+    internal TranslationView(TickBinding binding) => this.binding = binding;
+    [ScriptMember("x")] public double X
+    {
+        get { var controls = binding.Controls; return x ?? controls.X; }
+        set { _ = binding.Controls; Validate(value); x = value; }
+    }
+    [ScriptMember("y")] public double Y
+    {
+        get { var controls = binding.Controls; return y ?? controls.Y; }
+        set { _ = binding.Controls; Validate(value); y = value; }
+    }
+    [ScriptMember("z")] public double Z
+    {
+        get { var controls = binding.Controls; return z ?? controls.Z; }
+        set { _ = binding.Controls; Validate(value); z = value; }
+    }
+    private static void Validate(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value) || value < -1 || value > 1)
+            throw new ArgumentOutOfRangeException(nameof(value), "Translation axes must be -1..1.");
+    }
+    internal void Apply()
+    {
+        var controls = binding.Controls;
+        if (x.HasValue) controls.X = (float)x.Value;
+        if (y.HasValue) controls.Y = (float)y.Value;
+        if (z.HasValue) controls.Z = (float)z.Value;
+    }
+    internal void Clear() { x = null; y = null; z = null; }
 }
 
 public sealed class ResourcesView

@@ -15,7 +15,7 @@ internal static class ViewTests
         definitions = Regex.Replace(definitions, @"/\*[\s\S]*?\*/|//[^\r\n]*", "");
         foreach (var type in new[] { typeof(FlightContext), typeof(VesselView), typeof(OrbitView),
             typeof(BodyView), typeof(VelocityView), typeof(VectorView), typeof(ResourcesView),
-            typeof(ResourceTotals), typeof(ControlView), typeof(AttitudeView), typeof(LocalVectorView) })
+            typeof(ResourceTotals), typeof(ControlView), typeof(TranslationView), typeof(AttitudeView), typeof(LocalVectorView) })
         {
             var match = Regex.Match(definitions, @"interface\s+" + type.Name + @"\s*\{([^}]+)\}");
             Check(match.Success, "packaged declaration " + type.Name);
@@ -47,7 +47,8 @@ internal static class ViewTests
     }
 
     private static string TypeName(Type type) => type == typeof(double) ? "number" :
-        type == typeof(string) ? "string" : type == typeof(ScriptObject) ? "Storage" : type.Name;
+        type == typeof(bool) ? "boolean" : type == typeof(string) ? "string" :
+        type == typeof(ScriptObject) ? "Storage" : type == typeof(void) ? "void" : type.Name;
 
     internal static void Run()
     {
@@ -83,6 +84,35 @@ internal static class ViewTests
         control.Pitch = -1; context.End(); // Discard without commit.
         context.Begin(vessel, controls); context.Commit(); context.End();
         Check(controls.pitch == 0.2f, "discarded buffers do not leak to next tick");
+
+        // Action groups and RCS translation share the buffered commit/discard model.
+        context.Begin(vessel, controls);
+        control.Sas = true;
+        control.Translation.X = 0.5;
+        Check(control.Sas && control.Translation.X == 0.5, "buffered action group and translation reads");
+        context.Commit(); context.End();
+        Check(vessel.ActionGroups[KSPActionGroup.SAS] && controls.X == 0.5f, "action group and translation committed");
+        context.Begin(vessel, controls);
+        control.Gear = true;
+        control.Brakes = true;
+        context.End();
+        Check(!vessel.ActionGroups[KSPActionGroup.Gear] && !vessel.ActionGroups[KSPActionGroup.Brakes],
+            "discarded action groups do not apply");
+
+        // Discrete staging is queued and runs only after a successful tick.
+        var stageManager = KSP.UI.Screens.StageManager.Instance;
+        using (var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.stage(); } };"))
+        {
+            stageManager.Activations = 0;
+            worker.Tick(vessel, controls);
+            Check(stageManager.Activations == 1, "staging action commits after a successful tick");
+        }
+        using (var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.stage(); throw new Error('rollback'); } };"))
+        {
+            stageManager.Activations = 0;
+            Reject(() => worker.Tick(vessel, controls), "staging tick fault");
+            Check(stageManager.Activations == 0, "staging action is discarded when the tick fails");
+        }
 
         var logs = new List<string>();
         using (var worker = new FlightWorker("""
