@@ -77,15 +77,31 @@ internal sealed class FlightWorker : IDisposable
                 })();
                 """);
             engine.Execute(new DocumentInfo("klanker-entry") { Category = ModuleCategory.Standard }, """
-                import worker from 'worker';
+                import definition from 'worker';
+                if (typeof definition !== 'function')
+                    throw new TypeError('Worker must export a zero-argument class constructor; object exports were removed in 0.2.0');
+                const worker = new definition();
                 if (!worker || typeof worker.flightTick !== 'function')
-                    throw new TypeError('Worker must export default { flightTick(ctx) { ... } }');
+                    throw new TypeError('Worker constructor must produce an instance with flightTick(ctx)');
+                for (const name of ['onLoad', 'onSave']) {
+                    if (worker[name] !== undefined && typeof worker[name] !== 'function')
+                        throw new TypeError(name + ' must be a function');
+                }
                 const ctx = globalThis.__context;
                 delete globalThis.__context;
-                globalThis.__flightTick = () => {
-                    const result = worker.flightTick(ctx);
+                const lifecycle = Object.freeze({ storage: ctx.storage });
+                const synchronous = (result, name) => {
                     if (result && typeof result.then === 'function')
-                        throw new TypeError('flightTick must be synchronous');
+                        throw new TypeError(name + ' must be synchronous');
+                };
+                if (worker.onLoad) synchronous(worker.onLoad(lifecycle), 'onLoad');
+                const snapshot = globalThis.__snapshotStorage;
+                globalThis.__snapshotStorage = () => {
+                    if (worker.onSave) synchronous(worker.onSave(lifecycle), 'onSave');
+                    return snapshot();
+                };
+                globalThis.__flightTick = () => {
+                    synchronous(worker.flightTick(ctx), 'flightTick');
                 };
                 """);
         }

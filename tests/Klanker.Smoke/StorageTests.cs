@@ -8,8 +8,12 @@ internal static class StorageTests
     internal static void Run()
     {
         using var runtimeHost = new WorkerRuntime();
+        var legacyRejected = false;
+        try { using var legacy = runtimeHost.CreateWorker("export default { flightTick() {} };"); }
+        catch (Exception exception) { legacyRejected = exception.Message.Contains("object exports were removed"); }
+        Check(legacyRejected, "0.2 rejects legacy object exports with migration guidance");
         const string source = """
-            export default { flightTick(ctx) {
+            export default class { flightTick(ctx) {
                 if (Object.getPrototypeOf(ctx.storage) !== Object.prototype) throw new Error('not a JS object');
                 ctx.storage.count = (ctx.storage.count ?? 0) + 1;
                 ctx.storage.nested = { label: '航天器 {}', values: [true, null, 2] };
@@ -20,6 +24,44 @@ internal static class StorageTests
             """;
         var vessel = new Vessel();
         var controls = new FlightCtrlState();
+        const string lifecycleSource = """
+            export default class {
+                count = 0;
+                onLoad({storage}) { this.count = storage.count ?? 0; this.loads = 1; }
+                flightTick() { if (this.loads !== 1) throw new Error('load count'); this.count++; }
+                onSave(ctx) {
+                    if ('vessel' in ctx || !Object.isFrozen(ctx)) throw new Error('lifecycle context');
+                    ctx.storage.count = this.count;
+                }
+            }
+            """;
+        using (var worker = runtimeHost.CreateWorker(lifecycleSource, storageJson: "{\"count\":5}"))
+        {
+            worker.Tick(vessel, controls); worker.Tick(vessel, controls);
+            var snapshot = worker.SnapshotStorage();
+            Check(snapshot == "{\"count\":7}", "class fields survive ticks and save hook checkpoints them");
+            using var restoredWorker = runtimeHost.CreateWorker(lifecycleSource, storageJson: snapshot);
+            restoredWorker.Tick(vessel, controls);
+            Check(restoredWorker.SnapshotStorage() == "{\"count\":8}", "load hook restores class fields once");
+        }
+        foreach (var hook in new[] { "onLoad = 1;", "onSave = 1;", "async onLoad() {}", "onLoad() { throw new Error('load'); }", "onLoad() { while (true) {} }" })
+        {
+            var rejected = false;
+            try { using var invalid = runtimeHost.CreateWorker("export default class { flightTick() {} " + hook + " };"); }
+            catch { rejected = true; }
+            Check(rejected, "invalid lifecycle rejected: " + hook);
+        }
+        foreach (var body in new[] { "throw new Error('save')", "return Promise.resolve()", "while (true) {}", "storage.bad = NaN" })
+        {
+            var data = new ComputerProgram();
+            data.SetStorage("{\"good\":7}");
+            using var computer = new ComputerWorker(data, runtimeHost);
+            computer.Assign("hooks.js", "export default class { flightTick() {} onSave({storage}) { " + body + "; } };");
+            computer.Start(); computer.SetAuthority(true); computer.Tick(vessel, controls);
+            computer.CheckpointStorage();
+            Check(data.StorageJson == "{\"good\":7}" && computer.StorageError.Length > 0,
+                "failed save hook retains checkpoint: " + body);
+        }
         var program = new ComputerProgram();
         using (var computer = new ComputerWorker(program, runtimeHost))
         {
@@ -59,14 +101,14 @@ internal static class StorageTests
             var data = new ComputerProgram();
             data.SetStorage("{\"good\":7}");
             using var computer = new ComputerWorker(data, runtimeHost);
-            computer.Assign("bad.js", "export default { flightTick({storage, vessel}) { " + mutation + "; } };");
+            computer.Assign("bad.js", "export default class { flightTick({storage, vessel}) { " + mutation + "; } };");
             computer.Start(); computer.SetAuthority(true); computer.Tick(vessel, controls);
             computer.CheckpointStorage();
             Check(data.StorageJson == "{\"good\":7}" && computer.StorageError.Length > 0, "invalid storage retains checkpoint: " + mutation);
         }
         using (var computer = new ComputerWorker(new ComputerProgram(), runtimeHost))
         {
-            computer.Assign("fault.js", "export default { flightTick({storage}) { storage.bad = 1; throw new Error('fault'); } };");
+            computer.Assign("fault.js", "export default class { flightTick({storage}) { storage.bad = 1; throw new Error('fault'); } };");
             computer.Start(); computer.SetAuthority(true);
             try { computer.Tick(vessel, controls); } catch { }
             Check(computer.Program.StorageJson == "{}", "fault discards changes since last storage checkpoint");

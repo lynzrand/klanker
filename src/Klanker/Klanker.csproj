@@ -3,7 +3,7 @@
     <TargetFramework>net472</TargetFramework>
     <AssemblyName>Klanker</AssemblyName>
     <RootNamespace>Klanker</RootNamespace>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
 
     <KSPBT_ModRoot>$(MSBuildThisFileDirectory)../../build/GameData/Klanker</KSPBT_ModRoot>
     <KSPBT_ModPluginFolder>Plugins</KSPBT_ModPluginFolder>

@@ -112,13 +112,13 @@ internal static class ViewTests
 
         // Discrete staging is queued and runs only after a successful tick.
         var stageManager = KSP.UI.Screens.StageManager.Instance;
-        using (var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.stage(); } };"))
+        using (var worker = new FlightWorker("export default class { flightTick({vessel}) { vessel.stage(); } };"))
         {
             stageManager.Activations = 0;
             worker.Tick(vessel, controls);
             Check(stageManager.Activations == 1, "staging action commits after a successful tick");
         }
-        using (var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.stage(); throw new Error('rollback'); } };"))
+        using (var worker = new FlightWorker("export default class { flightTick({vessel}) { vessel.stage(); throw new Error('rollback'); } };"))
         {
             stageManager.Activations = 0;
             Reject(() => worker.Tick(vessel, controls), "staging tick fault");
@@ -188,7 +188,7 @@ internal static class ViewTests
             view.Parts.ById("202").Decoupler, "crossfeed and decoupler flags");
         context.End();
         using (var worker = new FlightWorker("""
-            export default { flightTick({vessel}) {
+            export default class { flightTick({vessel}) {
                 const assert = (ok, message) => { if (!ok) throw new Error(message); };
                 assert(vessel.dynamicPressure === 18.25 && vessel.body.hasAtmosphere, 'atmosphere');
                 assert(vessel.currentStage === 3 && vessel.availableThrust === 60, 'thrust and staging');
@@ -205,7 +205,7 @@ internal static class ViewTests
         // Exercise the parts API through real V8 to confirm arrays and nested
         // views marshal correctly.
         using (var worker = new FlightWorker("""
-            export default { flightTick({vessel}) {
+            export default class { flightTick({vessel}) {
                 const assert = (ok, message) => { if (!ok) throw new Error(message); };
                 assert(vessel.parts.count === 2 && vessel.parts.get(0).id === '101', 'parts count/get');
                 assert(vessel.parts.byName('fuelTank').count === 2, 'parts.byName');
@@ -233,7 +233,7 @@ internal static class ViewTests
         Reject(() => context.MechJeb.Landing.Start(), "MechJeb landing requires the mod");
         context.End();
         using (var worker = new FlightWorker("""
-            export default { flightTick({mechjeb}) {
+            export default class { flightTick({mechjeb}) {
                 if (mechjeb.available !== false) throw new Error('expected MechJeb absent');
                 try { mechjeb.node.execute(); throw new Error('expected throw'); }
                 catch (error) { if (String(error).includes('expected throw')) throw error; }
@@ -248,7 +248,7 @@ internal static class ViewTests
         using (var worker = new FlightWorker("""
             console.log('loaded', {ok: true}, 7);
             let oldOrbit;
-            export default { flightTick({vessel}) {
+            export default class { flightTick({vessel}) {
                 const assert = (ok, message) => { if (!ok) throw new Error(message); };
                 assert(typeof vessel.id === 'string' && vessel.name === 'Test vessel', 'identity');
                 assert(vessel.situation === 'FLYING' && vessel.mass === 2000, 'status/mass');
@@ -287,7 +287,7 @@ internal static class ViewTests
         }
         foreach (var value in new[] { "'0.5'", "null", "undefined", "true", "NaN", "Infinity", "2" })
         {
-            using var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.control.throttle = 1; vessel.control.pitch = " + value + "; } };");
+            using var worker = new FlightWorker("export default class { flightTick({vessel}) { vessel.control.throttle = 1; vessel.control.pitch = " + value + "; } };");
             controls.mainThrottle = 0.3f;
             Reject(() => worker.Tick(vessel, controls), "invalid control " + value);
             Check(controls.mainThrottle == 0.3f, "invalid setter rolls back all buffers");
@@ -295,7 +295,7 @@ internal static class ViewTests
         logs.Clear();
         using (var worker = new FlightWorker("""
             for (let i = 0; i < 100; i++) console.log('x'.repeat(3000));
-            export default { flightTick() {} };
+            export default class { flightTick() {} };
             """, logs.Add))
         {
             Check(logs.FindAll(line => line.Length == 2048).Count == 20, "bounded console output");
@@ -306,7 +306,7 @@ internal static class ViewTests
         // limit, repeated overflow, and next-window reset retain their behavior.
         logs.Clear();
         using (var worker = new FlightWorker("""
-            export default { flightTick() { for (let i = 0; i < 20; i++) console.log('bounded'); } };
+            export default class { flightTick() { for (let i = 0; i < 20; i++) console.log('bounded'); } };
             """, logs.Add))
         {
             worker.Tick(vessel, controls);

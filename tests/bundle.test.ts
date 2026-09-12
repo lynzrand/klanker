@@ -14,7 +14,7 @@ test('bundles klanker: modules and relative imports into one ESM default export'
             import { AttitudeHold } from 'klanker:attitude';
             const hold = new AttitudeHold();
             const limit: number = 1;
-            export default { flightTick(ctx: { vessel: any; deltaTime: number }): void {
+            export default class { flightTick(ctx: { vessel: any; deltaTime: number }): void {
                 const target: Vec3 = frame.prograde(ctx);
                 hold.aim(ctx, target);
                 if (Math.abs(vec.length(target) - limit) > 1e-9) throw new Error('bad target length');
@@ -37,7 +37,7 @@ test('bundles klanker: modules and relative imports into one ESM default export'
             },
             control: {} as Record<string, number>,
         };
-        module.default.flightTick({ vessel, deltaTime: 0.02 });
+        new module.default().flightTick({ vessel, deltaTime: 0.02 });
         assert.ok(Number.isFinite(vessel.control.yaw));
     } finally {
         await rm(directory, { recursive: true, force: true });
@@ -50,7 +50,7 @@ test('bundles bare klanker and klanker/<name> specifiers too', async () => {
         await writeFile(join(directory, 'worker.ts'), `
             import { PID } from 'klanker/pid';
             import { vec } from 'klanker';
-            export default { flightTick(): void {
+            export default class { flightTick(): void {
                 const pid = new PID(1, 0, 0);
                 pid.update(vec.length({ x: 1, y: 0, z: 0 }), 0, 0.02, 1);
             } };
@@ -58,7 +58,7 @@ test('bundles bare klanker and klanker/<name> specifiers too', async () => {
         const bundled = await bundleWorker(join(directory, 'worker.ts'));
         assert.doesNotMatch(bundled, /from\s*['"]klanker/);
         const module = await import('data:text/javascript;base64,' + Buffer.from(bundled).toString('base64')) as any;
-        module.default.flightTick();
+        new module.default().flightTick();
     } finally {
         await rm(directory, { recursive: true, force: true });
     }

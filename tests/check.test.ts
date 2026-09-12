@@ -11,12 +11,12 @@ test('type-checks a typed worker against the host API and libraries', async () =
         const good = join(directory, 'good.ts');
         await writeFile(good, `
             import vec from 'klanker:vec';
-            const worker: Klanker.Worker = {
-                flightTick({ vessel }) {
+            export default class Worker implements Klanker.Worker {
+                flightTick({ vessel }: Klanker.FlightContext) {
                     vessel.control.throttle = vec.length(vessel.velocity.orbital) >= 0 ? 1 : 0;
-                },
+                }
             };
-            export default worker;
+
         `);
         const goodResult = await checkWorker(good);
         assert.equal(goodResult.code, 0, goodResult.output);
@@ -24,25 +24,25 @@ test('type-checks a typed worker against the host API and libraries', async () =
         const bare = join(directory, 'bare.ts');
         await writeFile(bare, `
             import { PID, vec } from 'klanker';
-            const worker: Klanker.Worker = {
-                flightTick({ vessel }) {
+            export default class Worker implements Klanker.Worker {
+                flightTick({ vessel }: Klanker.FlightContext) {
                     vessel.control.throttle = vec.length(vessel.velocity.orbital) > 0 ? 1 : 0;
                     new PID(1, 0, 0);
-                },
+                }
             };
-            export default worker;
+
         `);
         const bareResult = await checkWorker(bare);
         assert.equal(bareResult.code, 0, bareResult.output);
 
         const bad = join(directory, 'bad.ts');
         await writeFile(bad, `
-            const worker: Klanker.Worker = {
-                flightTick({ vessel }) {
+            export default class Worker implements Klanker.Worker {
+                flightTick({ vessel }: Klanker.FlightContext) {
                     vessel.control.throttle = 'full';
-                },
+                }
             };
-            export default worker;
+
         `);
         const badResult = await checkWorker(bad);
         assert.notEqual(badResult.code, 0);

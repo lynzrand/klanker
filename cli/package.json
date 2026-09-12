@@ -1,6 +1,6 @@
 {
   "name": "klanker-cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Deploy and control Klanker flight workers on a running Kerbal Space Program game.",
   "license": "MPL-2.0",
   "type": "module",

@@ -22,11 +22,20 @@ function load(): Loaded {
     const logs: string[] = [];
     const sandbox: any = { console: { log: (...args: unknown[]) => logs.push(args.join(' ')) } };
     vm.runInNewContext(compiled +
-        '\n globalThis.PID = PID; globalThis.state = () => phase; globalThis.setPhase = transition; globalThis.horizontal = [northPID, eastPID];', sandbox);
+        '\n globalThis.worker = new globalThis.worker(); globalThis.PID = PID; globalThis.state = () => worker.phase; globalThis.setPhase = next => worker.transition(next); globalThis.horizontal = [worker.northPID, worker.eastPID];', sandbox);
     return { worker: sandbox.worker, logs, PID: sandbox.PID, state: sandbox.state,
         setPhase: sandbox.setPhase, horizontal: sandbox.horizontal };
 }
 const dot = (a: number[], b: number[]): number => a.reduce((sum, x, i) => sum + x * b[i], 0);
+test('two hopper instances in one module own independent state and controllers', () => {
+    const { worker } = load();
+    const other = new worker.constructor();
+    worker.transition('descend');
+    worker.northPID.integral = 0.1;
+    assert.equal(other.phase, 'climb');
+    assert.equal(other.northPID.integral, 0);
+    assert.notEqual(worker.eastPID, other.eastPID);
+});
 const cross = (a: number[], b: number[]): number[] => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const magnitude = (a: number[]): number => Math.hypot(...a);
 const scale = (a: number[], s: number): number[] => a.map(x => x * s);

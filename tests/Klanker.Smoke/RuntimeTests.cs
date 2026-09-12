@@ -10,14 +10,14 @@ internal static class RuntimeTests
         Check(host.ContextCount == 0, "warmup leaves no worker context");
         using var first = host.CreateWorker("""
             globalThis.secret = 123; Object.prototype.secret = 456;
-            export default { flightTick({storage, vessel}) {
+            export default class { flightTick({storage, vessel}) {
                 storage.count = (storage.count ?? 0) + 1;
                 vessel.control.throttle = 0.25;
             }};
             """);
         using var second = host.CreateWorker("""
             if (globalThis.secret !== undefined || ({}).secret !== undefined) throw new Error('globals leaked');
-            export default { flightTick({storage, vessel}) {
+            export default class { flightTick({storage, vessel}) {
                 if (storage.count !== undefined) throw new Error('storage leaked');
                 vessel.control.throttle = 0.75;
             }};
@@ -30,19 +30,19 @@ internal static class RuntimeTests
         Check(controls.mainThrottle == 0.75f && host.ContextCount == 2, "isolated globals/modules/storage in shared runtime");
         first.Dispose();
         Check(host.ContextCount == 1, "disposing context unregisters it");
-        Reject(() => host.CreateWorker("throw new Error('bad init'); export default {};"), "failed initialization");
+        Reject(() => host.CreateWorker("throw new Error('bad init'); export default class {};"), "failed initialization");
         Check(host.ContextCount == 1, "failed initialization does not leak a context");
-        using (var stuck = host.CreateWorker("export default { flightTick() { while(true) {} } };"))
+        using (var stuck = host.CreateWorker("export default class { flightTick() { while(true) {} } };"))
             Reject(() => stuck.Tick(vessel, controls), "shared-runtime watchdog");
         second.Tick(vessel, controls);
         Check(controls.mainThrottle == 0.75f, "watchdog fault does not poison another context");
-        using var fresh = host.CreateWorker("export default { flightTick({vessel}) { vessel.control.throttle = 0; } };");
+        using var fresh = host.CreateWorker("export default class { flightTick({vessel}) { vessel.control.throttle = 0; } };");
         fresh.Tick(vessel, controls);
         Check(controls.mainThrottle == 0, "fresh context after watchdog fault");
         // Keep first-tick grace distinct from steady-state and storage budgets
         // when moving timeout bookkeeping out of persistent worker fields.
         using (var budgeted = host.CreateWorker("""
-            export default { flightTick({vessel}) { console.log('wait'); vessel.control.throttle = 0.5; } };
+            export default class { flightTick({vessel}) { console.log('wait'); vessel.control.throttle = 0.5; } };
             """, _ => System.Threading.Thread.Sleep(40)))
         {
             budgeted.Tick(vessel, controls);
@@ -59,12 +59,12 @@ internal static class RuntimeTests
         }
         host.Dispose();
         Check(second.IsDisposed && fresh.IsDisposed && host.ContextCount == 0, "owner disposes remaining contexts");
-        Reject(() => host.CreateWorker("export default {};"), "disposed owner cannot create contexts");
+        Reject(() => host.CreateWorker("export default class {};"), "disposed owner cannot create contexts");
     }
 
     internal static void Benchmark()
     {
-        const string source = "export default { flightTick({vessel,storage}) { storage.count = (storage.count ?? 0) + 1; vessel.control.throttle = 0.5; } };";
+        const string source = "export default class { flightTick({vessel,storage}) { storage.count = (storage.count ?? 0) + 1; vessel.control.throttle = 0.5; } };";
         var vessel = new Vessel();
         var controls = new FlightCtrlState();
         double Measure(Func<FlightWorker> create)

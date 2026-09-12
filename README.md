@@ -13,13 +13,11 @@ It's a kOS for people who write JavaScript.
 // ascent.ts — full throttle below a 100 km apoapsis, then cut it.
 import { PID } from 'klanker';
 
-const worker: Klanker.Worker = {
-    flightTick({ vessel }) {
+export default class AscentWorker implements Klanker.Worker {
+    flightTick({ vessel }: Klanker.FlightContext): void {
         vessel.control.throttle = vessel.orbit.apoapsis < 100_000 ? 1 : 0;
-    },
-};
-
-export default worker;
+    }
+}
 ```
 
 ```sh

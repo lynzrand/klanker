@@ -16,11 +16,12 @@ let run = 0;
 
 // A deployed worker gets a fresh runtime and fresh module state. Bundling is
 // done once, but each simulation imports a distinct copy of the code so the
-// module-level phase machine starts clean.
-async function loadWorker(): Promise<{ flightTick(context: any): void }> {
+// instance phase machine starts clean.
+async function loadWorker(): Promise<Klanker.Worker> {
     const code = bundled + '\n// run ' + run++;
-    return (await import('data:text/javascript;base64,' +
-        Buffer.from(code).toString('base64'))).default as { flightTick(context: any): void };
+    const Worker = (await import('data:text/javascript;base64,' +
+        Buffer.from(code).toString('base64'))).default;
+    return new Worker();
 }
 
 const R = 600_000;
@@ -140,6 +141,7 @@ async function simulate(options: SimOptions = {}): Promise<SimResult> {
     const maxSeconds = options.maxSeconds ?? 900;
     const storage = options.storage ?? {};
     const worker = await loadWorker();
+    worker.onLoad?.({ storage: storage as Klanker.Storage });
     const logs: string[] = [];
     const trace: string[] = [];
     let clock = 0;
@@ -256,7 +258,7 @@ async function simulate(options: SimOptions = {}): Promise<SimResult> {
             };
 
             samples++;
-            worker.flightTick({ vessel, universalTime: time, deltaTime: dt, storage, mechjeb: { available: false } });
+            worker.flightTick({ vessel, universalTime: time, deltaTime: dt, storage, mechjeb: { available: false } } as unknown as Klanker.FlightContext);
             const control = vessel.control as { throttle: number; pitch: number; yaw: number; roll: number };
             assert.ok(Number.isFinite(control.throttle) && control.throttle >= 0 && control.throttle <= 1,
                 'throttle in range at t=' + time.toFixed(1));
@@ -311,6 +313,7 @@ async function simulate(options: SimOptions = {}): Promise<SimResult> {
             if (options.stopAfter !== undefined && time >= options.stopAfter) break;
         }
 
+        worker.onSave?.({ storage: storage as Klanker.Storage });
         const engineGroups = groups.filter(g => g.attached).map(g => g.name);
         const snapshot: Snapshot = {
             pos, vel, nose, right, belly, omega, time, stageIndex, lastThrottle,

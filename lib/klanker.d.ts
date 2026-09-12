@@ -6,8 +6,22 @@ declare namespace Klanker {
         [key: string]: JsonValue;
     }
     interface Worker {
+        /** Once per instance, before any ticks. Also runs during deployment validation. */
+        onLoad?(context: LifecycleContext): void;
+        /** At each checkpoint, before JSON validation. Copy durable instance fields to storage. */
+        onSave?(context: LifecycleContext): void;
         /** Synchronous: promises/async handlers are rejected. */
         flightTick(context: FlightContext): void;
+    }
+
+    /** Required default export: a zero-argument constructor producing a worker. */
+    interface WorkerConstructor {
+        new (): Worker;
+    }
+
+    /** No live vessel or timing access. Hooks must complete synchronously. */
+    interface LifecycleContext {
+        readonly storage: Storage;
     }
 
     interface FlightContext {

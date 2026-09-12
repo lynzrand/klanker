@@ -70,7 +70,7 @@ test('deploy without a selector targets the active part', async () => {
         const path = join(directory, 'bridge.json');
         await writeFile(path, JSON.stringify({ version: 1, port, token: 'tok', pid: 1 }));
         const worker = join(directory, 'active.ts');
-        await writeFile(worker, 'export default { flightTick() {} };\n');
+        await writeFile(worker, 'export default class { flightTick() {} };\n');
 
         await main(['--endpoint', path, 'deploy', worker, '--run']);
         const deploy = recorded.find(request => request.method === 'deploy');
@@ -92,7 +92,7 @@ test('deploy with --to still selects that alias', async () => {
         const path = join(directory, 'bridge.json');
         await writeFile(path, JSON.stringify({ version: 1, port, token: 'tok', pid: 1 }));
         const worker = join(directory, 'named.ts');
-        await writeFile(worker, 'export default { flightTick() {} };\n');
+        await writeFile(worker, 'export default class { flightTick() {} };\n');
 
         await main(['--endpoint', path, 'deploy', worker, '--to', 'guidance']);
         const deploy = recorded.find(request => request.method === 'deploy');

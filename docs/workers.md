@@ -1,14 +1,14 @@
 # Writing workers
 
-A worker is a JavaScript module with a default export containing a synchronous
-`flightTick` function:
+A worker is a JavaScript module exporting a zero-argument class whose instance
+implements a synchronous `flightTick` method:
 
 ```js
-export default {
+export default class {
     flightTick({ vessel }) {
         vessel.control.throttle = vessel.orbit.apoapsis < 100_000 ? 1 : 0;
-    },
-};
+    }
+}
 ```
 
 Deploy it with `pnpm klanker deploy <file> --to <alias>` (see the
@@ -38,12 +38,13 @@ workers get it directly: `import { PID } from 'klanker'` plus the global
 // @ts-check
 /// <reference path="./klanker.d.ts" />
 
-/** @satisfies {Klanker.Worker} */
-export default {
+/** @implements {Klanker.Worker} */
+export default class {
+    /** @param {Klanker.FlightContext} context */
     flightTick({ vessel }) {
         vessel.control.throttle = vessel.orbit.apoapsis < 100_000 ? 1 : 0;
-    },
-};
+    }
+}
 ~~~
 
 Telemetry includes vessel identity and situation, mass in kilograms, location,
@@ -117,14 +118,14 @@ the vessel. Check `mechjeb.available` first; every other member throws when
 MechJeb is absent.
 
 ~~~js
-export default {
+export default class {
     flightTick({ mechjeb }) {
         if (!mechjeb.available) return;
         mechjeb.attitude.enabled = true;
         mechjeb.attitude.reference = 'ORBIT';
         mechjeb.node.execute();
-    },
-};
+    }
+}
 ~~~
 
 Available operations: `attitude.enabled`, `attitude.reference` (a MechJeb
@@ -158,14 +159,36 @@ are not exposed.
 
 ## Persistent storage
 
+Workers must export a zero-argument constructor. Object exports are rejected
+starting in 0.2.0; replace saved scripts with rebuilt class-based workers. The host
+constructs one instance per runtime and calls optional `onLoad` and `onSave`
+methods with a frozen `{ storage }` context. Use instance fields for typed state
+between ticks; restore them once in `onLoad`, and copy durable values to storage
+in `onSave`. See `workers/samples/storage.ts` for a complete class example.
+
+`onLoad` runs after construction and before any ticks, including when validating
+a deployment. A standby deployment can be validated and disposed, then loaded
+again when it becomes active. Initialization must therefore tolerate repeated
+runtime creation. `onSave` runs at checkpoints (including state inspection,
+KSP saves, replacement and normal teardown), not each tick. Its return value is
+ignored. Both hooks must be synchronous and have no live vessel or timing access.
+Construction and loading share the initialization watchdog; saving shares the
+250 ms serialization budget. Failed saves preserve the last valid checkpoint.
+Fault teardown skips saving, so fields changed since that checkpoint are lost.
+
+The host already parses saved JSON once per runtime, not per physics frame.
+Lifecycle hooks also let scripts avoid decoding and validating their own typed
+state every tick. Class instances, controllers and other runtime objects should
+remain in fields; only ordinary JSON values belong in storage.
+
 Each command part has its own mutable `ctx.storage` object:
 
 ~~~js
-export default {
+export default class {
     flightTick({ storage, vessel }) {
         storage.highestAltitude = Math.max(storage.highestAltitude ?? 0, vessel.altitude);
-    },
-};
+    }
+}
 ~~~
 
 Klanker serializes it as JSON when KSP calls the part's save hook. The JSON is
