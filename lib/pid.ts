@@ -33,6 +33,16 @@ export class PID {
      * @param deadband error below which no action is taken
      */
     update(target: number, measurement: number, dt: number, limit: number, deadband = 0): number {
+        if (!Number.isFinite(target) || !Number.isFinite(measurement))
+            throw new TypeError('PID target and measurement must be finite numbers.');
+        if (!Number.isFinite(dt) || dt <= 0)
+            throw new RangeError('PID dt must be a positive finite number.');
+        if (!Number.isFinite(limit) || limit < 0)
+            throw new RangeError('PID limit must be a non-negative finite number.');
+        if (!Number.isFinite(deadband) || deadband < 0)
+            throw new RangeError('PID deadband must be a non-negative finite number.');
+        if (![this.kp, this.ki, this.kd, this.integral, this.derivative].every(Number.isFinite))
+            throw new TypeError('PID gains and state must be finite numbers.');
         const rawDerivative = this.previous === null ? 0 : (measurement - this.previous) / dt;
         this.previous = measurement;
         this.derivative += dt / (0.35 + dt) * (rawDerivative - this.derivative);
@@ -49,6 +59,9 @@ export class PID {
 
     /** Back-calculation for a separately applied (e.g. vector-limited) output. */
     track(applied: number, dt: number): void {
+        if (!Number.isFinite(applied)) throw new TypeError('PID applied output must be a finite number.');
+        if (!Number.isFinite(dt) || dt <= 0)
+            throw new RangeError('PID dt must be a positive finite number.');
         this.integral = Math.max(-0.2, Math.min(0.2, this.integral + (applied - this.output) * Math.min(1, dt)));
     }
 }

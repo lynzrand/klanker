@@ -19,6 +19,7 @@ test('vector algebra', () => {
     assert.ok(close(vec.length(vec.normalize({ x: 3, y: 4, z: 0 })), 1));
     const rotated = vec.rotateAround({ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }, Math.PI / 2);
     assert.ok(close(rotated.x, 0) && close(rotated.y, 1));
+    assert.deepEqual(vec.rotateAround({ x: 1, y: 2, z: 3 }, vec.zero(), 0.7), { x: 1, y: 2, z: 3 });
 });
 
 test('PID regulates, rejects windup, and tracks', () => {
@@ -30,29 +31,43 @@ test('PID regulates, rejects windup, and tracks', () => {
     assert.equal(saturated.integral, 0);
     saturated.track(0, 0.02);
     assert.ok(saturated.integral <= 0);
+    assert.throws(() => saturated.update(1, 0, 0, 1), /positive finite/);
+    assert.throws(() => saturated.track(0, Number.NaN), /positive finite/);
 });
 
 test('attitude hold aims and damps', () => {
     const hold = new AttitudeHold({ kp: 1, kd: 0, maxInput: 0.25 });
-    const vessel = { attitude: { angularVelocity: { x: 0, y: 0, z: 0 } }, control: {} as Record<string, number> };
+    const vessel = {
+        attitude: { angularVelocity: { x: 0, y: 0, z: 0 }, up: { x: 0, y: 0, z: 1 } },
+        control: {} as Record<string, number>,
+    };
     hold.aim({ vessel }, { x: 1, y: 0, z: 0 });
     assert.equal(vessel.control.yaw, 0.25);
     assert.equal(vessel.control.pitch, 0);
     const damping = new AttitudeHold({ kp: 0, kd: 1, maxInput: 0.25 });
-    const spinning = { attitude: { angularVelocity: { x: 0.5, y: 0, z: 0 } }, control: {} as Record<string, number> };
+    const spinning = {
+        attitude: { angularVelocity: { x: 0.5, y: 0, z: 0 }, up: { x: 1, y: 0, z: 0 } },
+        control: {} as Record<string, number>,
+    };
     damping.aim({ vessel: spinning }, { x: 0, y: 1, z: 0 });
     assert.equal(spinning.control.pitch, 0.25);
+    const up = hold.holdUp({ vessel });
+    assert.deepEqual(up, { x: 0, y: 0, z: 1 });
+    assert.equal(vessel.control.pitch, -0.25);
 });
 
-test('frames convert between world and control axes', () => {
+test('frames convert between ENU and control axes', () => {
     const identity = {
         vessel: {
             attitude: { east: { x: 1, y: 0, z: 0 }, north: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 } },
-            velocity: { orbital: { x: 0, y: 1, z: 0 }, surface: { x: 1, y: 0, z: 0 } },
+            velocity: {
+                orbital: { x: 10, y: 20, z: 30 }, surface: { x: 40, y: 50, z: 60 },
+                localOrbital: { x: 0, y: 1, z: 0 }, localSurface: { x: 1, y: 0, z: 0 },
+            },
         },
     };
-    assert.deepEqual(frame.toLocal(identity, { x: 2, y: 3, z: 4 }), { x: 2, y: 3, z: 4 });
-    assert.deepEqual(frame.toWorld(identity, { x: 5, y: 6, z: 7 }), { x: 5, y: 6, z: 7 });
+    assert.deepEqual(frame.enuToLocal(identity, { x: 2, y: 3, z: 4 }), { x: 2, y: 3, z: 4 });
+    assert.deepEqual(frame.localToEnu(identity, { x: 5, y: 6, z: 7 }), { x: 5, y: 6, z: 7 });
     assert.deepEqual(frame.prograde(identity), { x: 0, y: 1, z: 0 });
     assert.deepEqual(frame.radialOut(identity), { x: 0, y: 0, z: 1 });
     // r x v = (0,0,1) x (0,1,0) = (-1,0,0)
@@ -61,19 +76,32 @@ test('frames convert between world and control axes', () => {
     const rotated = {
         vessel: {
             attitude: { east: { x: 0, y: 0, z: -1 }, north: { x: 0, y: 1, z: 0 }, up: { x: 1, y: 0, z: 0 } },
-            velocity: { orbital: { x: 1, y: 0, z: 0 }, surface: { x: 0, y: 0, z: 1 } },
+            velocity: {
+                orbital: { x: 99, y: 98, z: 97 }, surface: { x: 96, y: 95, z: 94 },
+                localOrbital: { x: 0, y: 0, z: -2 }, localSurface: { x: 3, y: 0, z: 0 },
+            },
         },
     };
     const world = { x: 1, y: 2, z: 3 };
-    const back = frame.toWorld(rotated, frame.toLocal(rotated, world));
+    const back = frame.localToEnu(rotated, frame.enuToLocal(rotated, world));
     assert.ok(close(back.x, world.x) && close(back.y, world.y) && close(back.z, world.z));
+    assert.deepEqual(frame.prograde(rotated), { x: 0, y: 0, z: -1 });
+    assert.deepEqual(frame.surfacePrograde(rotated), { x: 1, y: 0, z: 0 });
+    assert.deepEqual(frame.radialOut(rotated), { x: 1, y: 0, z: 0 });
+    assert.deepEqual(frame.northUp(rotated), { x: 0, y: 1, z: 0 });
+    assert.deepEqual(frame.east(rotated), { x: 0, y: 0, z: -1 });
+    const rotatedNormal = frame.normal(rotated);
+    assert.ok(close(rotatedNormal.x, 0) && close(rotatedNormal.y, 1) && close(rotatedNormal.z, 0));
 });
 
 test('frame tilt builds pitch and azimuth in control axes', () => {
     const upright = {
         vessel: {
             attitude: { east: { x: 1, y: 0, z: 0 }, north: { x: 0, y: 0, z: 1 }, up: { x: 0, y: 1, z: 0 } },
-            velocity: { orbital: { x: 0, y: 1, z: 0 }, surface: { x: 0, y: 1, z: 0 } },
+            velocity: {
+                orbital: { x: 0, y: 1, z: 0 }, surface: { x: 0, y: 1, z: 0 },
+                localOrbital: { x: 0, y: 1, z: 0 }, localSurface: { x: 0, y: 1, z: 0 },
+            },
         },
     };
     const up = frame.tilt(upright, 0);

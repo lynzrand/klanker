@@ -15,7 +15,7 @@ test('bundles klanker: modules and relative imports into one ESM default export'
             const hold = new AttitudeHold();
             const limit: number = 1;
             export default { flightTick(ctx: { vessel: any; deltaTime: number }): void {
-                const target: Vec3 = frame.toLocal(ctx, frame.prograde(ctx));
+                const target: Vec3 = frame.prograde(ctx);
                 hold.aim(ctx, target);
                 if (Math.abs(vec.length(target) - limit) > 1e-9) throw new Error('bad target length');
             } };
@@ -31,7 +31,10 @@ test('bundles klanker: modules and relative imports into one ESM default export'
                 east: { x: 1, y: 0, z: 0 }, north: { x: 0, y: 1, z: 0 }, up: { x: 0, y: 0, z: 1 },
                 angularVelocity: { x: 0, y: 0, z: 0 },
             },
-            velocity: { orbital: { x: 0, y: 1, z: 0 }, surface: { x: 0, y: 1, z: 0 } },
+            velocity: {
+                orbital: { x: 0, y: 1, z: 0 }, surface: { x: 0, y: 1, z: 0 },
+                localOrbital: { x: 0, y: 1, z: 0 }, localSurface: { x: 0, y: 1, z: 0 },
+            },
             control: {} as Record<string, number>,
         };
         module.default.flightTick({ vessel, deltaTime: 0.02 });

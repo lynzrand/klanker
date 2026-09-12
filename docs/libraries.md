@@ -64,30 +64,31 @@ hold.killRotation(ctx);              // damp only
 
 ## klanker:frame
 
-Builds directions in the active control frame from `vessel.attitude.*` (which
-are already control-frame vectors), and converts between the world east/north/up
-components and the control frame.
+Builds directions in the active control frame from `vessel.attitude.*` and the
+host's exact `velocity.local*` transforms. It also converts between
+east/north/up (ENU) components and the control frame.
 
-- `tilt(ctx, pitchDegrees, azimuthDegrees = 90)` — a direction `pitch` degrees
-  above the horizon at a compass azimuth from north; 0 is straight up, 90 is
-  horizontal, and the default azimuth 90 is due east. Feed it to `AttitudeHold`.
-- `prograde`, `retrograde`, `surfacePrograde`, `surfaceRetrograde` — built from
-  `vessel.velocity.orbital`/`surface`, so they return **world-axis** vectors.
+- `tilt(ctx, pitchDegrees, azimuthDegrees = 90)` — a direction tilted `pitch`
+  degrees from radial-out toward the horizon at a compass azimuth from north;
+  0 is straight up, 90 is horizontal, and the default azimuth 90 is due east.
+  Feed it to `AttitudeHold`.
+- `prograde`, `retrograde`, `surfacePrograde`, `surfaceRetrograde` — control-frame
+  directions built from `vessel.velocity.localOrbital`/`localSurface`; they can
+  be fed directly to `AttitudeHold.aim`.
 - `radialOut`, `radialIn`, `northUp`, `east`, `normal`, `antiNormal`
 - `orbitalBasis`, `surfaceBasis`
-- `toLocal(ctx, world)` / `localize`, `toWorld(ctx, local)` / `globalize`
+- `enuToLocal(ctx, enu)`, `localToEnu(ctx, local)`
 
 ```js
 import frame from 'klanker:frame';
 const target = frame.tilt(ctx, 45);        // 45 degrees above the eastern horizon
 ```
 
-`toLocal`/`toWorld` treat the argument's components as east/north/up, so they
-only round-trip correctly for vectors already expressed in that basis. They are
-not a general world transform: KSP's Unity world axes are not east/north/up, so
-do not feed a raw `vessel.velocity.orbital` through `toLocal`. For velocity use
-the host's exact transforms instead — `vessel.velocity.localSurface` and
-`vessel.velocity.localOrbital`, both already in control axes.
+The older `toLocal`/`localize` and `toWorld`/`globalize` names remain as
+deprecated aliases for `enuToLocal` and `localToEnu`. They are not general Unity
+world transforms: KSP's Unity world axes are not east/north/up. For velocity use
+the direction helpers or the host's exact `vessel.velocity.localSurface` and
+`vessel.velocity.localOrbital` values.
 
 ## klanker:orbit
 

@@ -59,14 +59,12 @@ V8 heap. Runtime recreation would bind the actor's state and current vessel befo
 resuming event delivery. Code caches would be disposable performance aids, not
 save-game data.
 
-Deployment should validate a replacement before activating it at a safe execution
-boundary. A failed replacement should leave the old worker intact. We would need
-explicit ways to reset or migrate saved state when scripts change.
-
-A dedicated CLI could eventually list actors, deploy scripts, follow logs, inspect
-telemetry, and restart faulted workers. It does not exist yet: `pnpm make deploy`
-currently installs the mod's files into a local KSP directory, not a worker onto
-an onboard actor.
+Deployment now bundles and validates a replacement before it reaches the game,
+then constructs the replacement worker before releasing the old one. A failed
+replacement leaves the old worker intact. The CLI can list actors, deploy and
+control workers, follow logs, and inspect or reset saved state through the
+token-guarded loopback bridge. Deployment revisions, source hashes, and explicit
+state migrations are still absent.
 
 ## Parts and tags
 
@@ -103,11 +101,24 @@ communication should affect deployments, commands, and telemetry, not stop code
 already running onboard. RPC, external workers, multi-actor scheduling, and
 unloaded-vessel simulation are all outside this PoC.
 
-## Next milestone
+## Current boundary and next milestone
 
-Command parts now have worker identities, saved script assignments, and an
-opt-in run setting. This is the first part-backed slice, not the complete actor
-model above. A simple per-part JSON store is now exposed as `ctx.storage` and
-checkpointed on KSP save and normal runtime teardown. Aliases, deployment
-revisions, state migrations, and dedicated development tooling remain to be
-designed and implemented.
+The original M0-M2 path is substantially present: command parts have stable
+worker identities, aliases, saved deployments and JSON state; the active control
+part owns flight authority; workers can be deployed, stopped, restarted and
+observed through the CLI; and faults are sticky. Buffered continuous controls
+and queued staging/engine actions commit only after a successful tick.
+
+The implementation deliberately uses tick-scoped part wrappers: scripts persist
+`part.id` and re-query with `parts.byId()` rather than retaining a stable wrapper
+across topology changes. There are still no deployment revisions or hashes,
+state migrations, actor mailboxes, background execution, remote spacecraft API
+or telemetry subscriptions, multi-actor scheduling, RemoteTech behavior, or
+unloaded-vessel simulation. MechJeb has a narrow experimental adapter rather
+than the broader provider system from the proposal.
+
+The immediate milestone is confidence rather than more surface area: complete
+the in-game editor/save/load/control-handoff checklist, validate MechJeb in game,
+and exercise the bundled Linux and macOS native libraries. After that, deployment
+metadata and state migration are the smallest coherent additions to the actor
+model; RPC and messaging remain separate future projects.
