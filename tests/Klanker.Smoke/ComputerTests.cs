@@ -9,7 +9,7 @@ internal static class ComputerTests
     internal static void Run(string plugins)
     {
         using var runtimeHost = new WorkerRuntime();
-        const string source = "// braces {} = // and unicode: 航天器\nexport default { flightTick({vessel}) { vessel.control.throttle = 0.25; } };";
+        const string source = "// braces {} = // and unicode: 航天器\nexport default class { flightTick({vessel}) { vessel.control.throttle = 0.25; } };";
         var program = new ComputerProgram();
         program.Assign("test.js", source);
         program.EnsureIdentity();
@@ -44,7 +44,7 @@ internal static class ComputerTests
             var testControls = new FlightCtrlState();
             worker.Tick(testVessel, testControls);
             Check(testControls.mainThrottle == 0.25f, "saved script starts on activation");
-            Reject(() => worker.Assign("broken.js", "export default {};"), "failed replacement rejected");
+            Reject(() => worker.Assign("broken.js", "export default class {};"), "failed replacement rejected");
             testControls.mainThrottle = 0;
             worker.Tick(testVessel, testControls);
             Check(worker.Program.Source == source && testControls.mainThrottle == 0.25f, "failed replacement retains saved and running script");
@@ -53,7 +53,7 @@ internal static class ComputerTests
             Reject(() => worker.Tick(testVessel, testControls), "standby cannot tick");
             worker.SetAuthority(true);
             Check(worker.IsRunning, "reactivation recreates runtime");
-            worker.Assign("fault.js", "export default { flightTick() { throw new Error('sticky'); } };");
+            worker.Assign("fault.js", "export default class { flightTick() { throw new Error('sticky'); } };");
             Reject(() => worker.Tick(testVessel, testControls), "worker fault");
             worker.SetAuthority(false);
             worker.SetAuthority(true);
@@ -76,7 +76,7 @@ internal static class ComputerTests
         addon.Awake();
         var vessel = new Vessel();
         var a = Pod(vessel, source);
-        var b = Pod(vessel, "export default { flightTick({vessel}) { vessel.control.throttle = 0.75; } };");
+        var b = Pod(vessel, "export default class { flightTick({vessel}) { vessel.control.throttle = 0.75; } };");
         try
         {
             FlightGlobals.ActiveVessel = vessel;

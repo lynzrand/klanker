@@ -102,6 +102,44 @@ public sealed class VesselView
     [ScriptMember("surfaceSpeed")] public double SurfaceSpeed => binding.Vessel.srfSpeed;
     [ScriptMember("horizontalSpeed")] public double HorizontalSpeed => binding.Vessel.horizontalSrfSpeed;
     [ScriptMember("orbitalSpeed")] public double OrbitalSpeed => binding.Vessel.obt_velocity.magnitude;
+    // Atmosphere and acceleration telemetry, matching the inputs MechJeb's
+    // ascent guidance reads. Pressures are kPa and density is KSP's raw value;
+    // no unit conversion is applied, so scripts work in KSP units throughout.
+    [ScriptMember("staticPressure")] public double StaticPressure => binding.Vessel.staticPressurekPa;
+    [ScriptMember("dynamicPressure")] public double DynamicPressure => binding.Vessel.dynamicPressurekPa;
+    [ScriptMember("atmosphericDensity")] public double AtmosphericDensity => binding.Vessel.atmDensity;
+    [ScriptMember("mach")] public double Mach => binding.Vessel.mach;
+    [ScriptMember("geeForce")] public double GeeForce => binding.Vessel.geeForce;
+    // KSP's staging-list index: it decrements as stages fire and reaches 0 at
+    // the final stage, so currentStage > 0 means another stage remains.
+    [ScriptMember("currentStage")] public double CurrentStage => binding.Vessel.currentStage;
+    // Summed thrust in kN. currentThrust is what the engines produce now;
+    // availableThrust is the vacuum potential of lit, operational engines at
+    // full throttle, including their thrust limiters.
+    [ScriptMember("currentThrust")] public double CurrentThrust
+    {
+        get { _ = binding.Vessel; double total = 0; foreach (var engine in Engines()) total += engine.finalThrust; return total; }
+    }
+    [ScriptMember("availableThrust")] public double AvailableThrust
+    {
+        get
+        {
+            _ = binding.Vessel; double total = 0;
+            foreach (var engine in Engines())
+                if (engine.getIgnitionState && engine.isOperational) total += engine.MaxThrustOutputVac(true);
+            return total;
+        }
+    }
+    // Engine counts for autostaging, so a worker does not have to walk
+    // vessel.parts every tick (each parts.get is a host call and an allocation).
+    [ScriptMember("engineCount")] public double EngineCount
+    {
+        get { _ = binding.Vessel; int count = 0; foreach (var _ in Engines()) count++; return count; }
+    }
+    [ScriptMember("flameoutEngines")] public double FlameoutEngines
+    {
+        get { _ = binding.Vessel; int count = 0; foreach (var engine in Engines()) if (engine.flameout) count++; return count; }
+    }
     [ScriptMember("orbit")] public OrbitView Orbit { get; }
     [ScriptMember("body")] public BodyView Body { get; }
     [ScriptMember("velocity")] public VelocityView Velocity { get; }
@@ -111,6 +149,13 @@ public sealed class VesselView
     [ScriptMember("attitude")] public AttitudeView Attitude { get; }
     // Queued, not buffered: the next stage fires only after a successful tick.
     [ScriptMember("stage")] public void Stage() => binding.Queue(() => KSP.UI.Screens.StageManager.ActivateNextStage());
+    // Every engine on the current vessel, across all parts and stages.
+    private IEnumerable<ModuleEngines> Engines()
+    {
+        foreach (var part in binding.Vessel.parts)
+            foreach (PartModule module in part.Modules)
+                if (module is ModuleEngines engine) yield return engine;
+    }
 }
 
 public sealed class OrbitView
@@ -140,6 +185,9 @@ public sealed class BodyView
     [ScriptMember("name")] public string Name => binding.Vessel.mainBody.bodyName;
     [ScriptMember("radius")] public double Radius => binding.Vessel.mainBody.Radius;
     [ScriptMember("gravitationalParameter")] public double GravitationalParameter => binding.Vessel.mainBody.gravParameter;
+    // False for airless bodies, where atmosphereDepth is meaningless (KSP leaves it at 0).
+    [ScriptMember("hasAtmosphere")] public bool HasAtmosphere => binding.Vessel.mainBody.atmosphere;
+    [ScriptMember("atmosphereDepth")] public double AtmosphereDepth => binding.Vessel.mainBody.atmosphereDepth;
 }
 
 public sealed class VelocityView
@@ -149,10 +197,12 @@ public sealed class VelocityView
         Surface = new VectorView(binding, true);
         Orbital = new VectorView(binding, false);
         LocalSurface = new LocalVectorView(binding, LocalVectorKind.SurfaceVelocity);
+        LocalOrbital = new LocalVectorView(binding, LocalVectorKind.OrbitalVelocity);
     }
     [ScriptMember("surface")] public VectorView Surface { get; }
     [ScriptMember("orbital")] public VectorView Orbital { get; }
     [ScriptMember("localSurface")] public LocalVectorView LocalSurface { get; }
+    [ScriptMember("localOrbital")] public LocalVectorView LocalOrbital { get; }
 }
 
 public sealed class AttitudeView
@@ -170,7 +220,7 @@ public sealed class AttitudeView
     [ScriptMember("angularVelocity")] public LocalVectorView AngularVelocity { get; }
 }
 
-internal enum LocalVectorKind { Up, North, East, AngularVelocity, SurfaceVelocity }
+internal enum LocalVectorKind { Up, North, East, AngularVelocity, SurfaceVelocity, OrbitalVelocity }
 
 // Transform values, not handles: x=right, y=nose, z=belly of Control from Here.
 public sealed class LocalVectorView
@@ -189,6 +239,7 @@ public sealed class LocalVectorView
                 LocalVectorKind.North => (UnityEngine.Vector3)vessel.north,
                 LocalVectorKind.East => (UnityEngine.Vector3)vessel.east,
                 LocalVectorKind.SurfaceVelocity => (UnityEngine.Vector3)vessel.srf_velocity,
+                LocalVectorKind.OrbitalVelocity => (UnityEngine.Vector3)vessel.obt_velocity,
                 LocalVectorKind.AngularVelocity => vessel.rootPart.rb.angularVelocity,
                 _ => throw new InvalidOperationException("Unknown local vector."),
             };

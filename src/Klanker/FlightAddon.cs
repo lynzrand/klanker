@@ -88,7 +88,9 @@ public sealed class FlightAddon : MonoBehaviour
         if (selected == null && candidate != null) Select(candidate);
     }
 
-    private static KlankerComputer? FindActiveComputer(Vessel? vessel)
+    // Also used by the bridge to resolve an unnamed deploy: the computer on the
+    // active vessel's current control-point part.
+    internal static KlankerComputer? FindActiveComputer(Vessel? vessel)
     {
         if (vessel == null || !vessel.loaded || vessel.packed) return null;
         var reference = vessel.GetReferenceTransformPart();

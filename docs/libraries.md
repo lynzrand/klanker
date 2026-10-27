@@ -15,10 +15,22 @@ pnpm klanker deploy ascent.ts --to guidance --run
 ```
 
 The libraries under [`lib/`](../lib) are TypeScript sources; type-checking maps
-`klanker:*` onto them. They are not shipped in `GameData`, and the runtime does
-not need a module loader. The in-game **Assign / reload file** path does not
-bundle, so files assigned there must be self-contained JavaScript (the shipped
-examples are).
+`klanker:*` onto them. The same modules are published as the `klanker` npm
+package, so any TypeScript project can import them directly and get editor
+completion and checking:
+
+```ts
+import { PID, vec } from 'klanker';
+import frame from 'klanker/frame';
+```
+
+The files ship as TypeScript, so your bundler (or `pnpm klanker`) compiles them;
+there is no separate runtime build. Imports also work through the original
+`klanker:<name>` scheme. The `Klanker.Worker` host API declaration ships here
+too, as `klanker/api`. The libraries are not loaded at runtime by the game, and
+it does not need a module loader. The in-game **Assign / reload file** path does
+not bundle, so files assigned there must be self-contained JavaScript; the
+shipped examples are bundled into `GameData/Klanker/Workers` at build time.
 
 ## klanker:vec
 
@@ -52,22 +64,53 @@ hold.killRotation(ctx);              // damp only
 
 ## klanker:frame
 
-Converts between KSP Unity world axes (used by `vessel.velocity.*` and body
-telemetry) and the control frame (used by `vessel.attitude.*` and writable
-controls), and builds the usual directions.
+Builds directions in the active control frame from `vessel.attitude.*` and the
+host's exact `velocity.local*` transforms. It also converts between
+east/north/up (ENU) components and the control frame.
 
-- `toLocal(ctx, world)` / `localize`, `toWorld(ctx, local)` / `globalize`
-- `prograde`, `retrograde`, `surfacePrograde`, `surfaceRetrograde`
+- `tilt(ctx, pitchDegrees, azimuthDegrees = 90)` — a direction tilted `pitch`
+  degrees from radial-out toward the horizon at a compass azimuth from north;
+  0 is straight up, 90 is horizontal, and the default azimuth 90 is due east.
+  Feed it to `AttitudeHold`.
+- `prograde`, `retrograde`, `surfacePrograde`, `surfaceRetrograde` — control-frame
+  directions built from `vessel.velocity.localOrbital`/`localSurface`; they can
+  be fed directly to `AttitudeHold.aim`.
 - `radialOut`, `radialIn`, `northUp`, `east`, `normal`, `antiNormal`
 - `orbitalBasis`, `surfaceBasis`
+- `enuToLocal(ctx, enu)`, `localToEnu(ctx, local)`
 
 ```js
 import frame from 'klanker:frame';
-const local = frame.toLocal(ctx, frame.prograde(ctx)); // prograde in control axes
+const target = frame.tilt(ctx, 45);        // 45 degrees above the eastern horizon
 ```
 
-The conversion uses `vessel.attitude.east/north/up`, so it is exact for the
-current tick's control frame.
+The older `toLocal`/`localize` and `toWorld`/`globalize` names remain as
+deprecated aliases for `enuToLocal` and `localToEnu`. They are not general Unity
+world transforms: KSP's Unity world axes are not east/north/up. For velocity use
+the direction helpers or the host's exact `vessel.velocity.localSurface` and
+`vessel.velocity.localOrbital` values.
+
+## klanker:orbit
+
+Two-body formulas for launch and transfer guidance: plain numbers and
+`{ radius, gravitationalParameter }` bodies, metres and seconds and kilograms,
+matching `vessel.mass` and the kN thrust fields.
+
+- `gravity(mu, radius)`, `circularSpeed(mu, radius)`, `escapeSpeed(mu, radius)`
+- `visViva(mu, radius, semiMajorAxis)`, `apoapsisSpeed(...)`, `periapsisSpeed(...)`
+- `period(mu, semiMajorAxis)`
+- `altitudeToRadius(body, altitude)`, `radiusToAltitude(body, radius)`
+- `circularizationDeltaV(mu, radius, semiMajorAxis)`
+- `burnTime(massKg, deltaV, thrustKN)` — constant-thrust estimate
+- `rocketBurnTime(massKg, deltaV, thrustKN, isp)` — from the rocket equation
+- `standardGravity`
+
+```js
+import orbit from 'klanker:orbit';
+const apR = orbit.altitudeToRadius(vessel.body, vessel.orbit.apoapsis);
+const dv = orbit.circularizationDeltaV(vessel.body.gravitationalParameter, apR, vessel.orbit.semiMajorAxis);
+const seconds = orbit.rocketBurnTime(vessel.mass, dv, vessel.availableThrust, vacuumIsp);
+```
 
 ## klanker:mechjeb
 

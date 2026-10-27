@@ -20,7 +20,7 @@ internal static class Program
             var vessel = new Vessel { altitude = 10 };
             var controls = new FlightCtrlState();
             using (var worker = new FlightWorker("""
-                export default { flightTick({vessel}) {
+                export default class { flightTick({vessel}) {
                     vessel.control.throttle = vessel.altitude < 100 ? 0.7 : 0;
                     if (vessel.control.throttle !== (vessel.altitude < 100 ? 0.7 : 0))
                         throw new Error('read-after-write failed');
@@ -34,23 +34,23 @@ internal static class Program
                 Check(controls.mainThrottle == 0, "live reads between ticks");
             }
 
-            ExpectFault("export default { flightTick({vessel}) { vessel.control.throttle = 1; throw new Error('rollback'); } }", "rollback");
-            ExpectFault("export default { flightTick({vessel}) { vessel.control.pitch = 2; } }", "invalid control");
-            ExpectFault("export default { async flightTick() {} }", "async handler");
+            ExpectFault("export default class { flightTick({vessel}) { vessel.control.throttle = 1; throw new Error('rollback'); } }", "rollback");
+            ExpectFault("export default class { flightTick({vessel}) { vessel.control.pitch = 2; } }", "invalid control");
+            ExpectFault("export default class { async flightTick() {} }", "async handler");
             var watch = Stopwatch.StartNew();
-            ExpectFault("export default { flightTick({vessel}) { vessel.control.throttle = 1; while(true) {} } }", "watchdog");
+            ExpectFault("export default class { flightTick({vessel}) { vessel.control.throttle = 1; while(true) {} } }", "watchdog");
             Check(watch.Elapsed.TotalSeconds < 5, "watchdog returned within 5 seconds");
 
             var rejected = false;
-            try { using var invalid = new FlightWorker("export default {};"); }
+            try { using var invalid = new FlightWorker("export default class {};"); }
             catch { rejected = true; }
             Check(rejected, "invalid deployment rejected");
             watch.Restart();
             rejected = false;
-            try { using var stuck = new FlightWorker("while (true) {} export default { flightTick() {} };"); }
+            try { using var stuck = new FlightWorker("while (true) {} export default class { flightTick() {} };"); }
             catch { rejected = true; }
             Check(rejected && watch.Elapsed.TotalSeconds < 5, "module initialization watchdog");
-            using (var recreated = new FlightWorker("export default { flightTick() {} };"))
+            using (var recreated = new FlightWorker("export default class { flightTick() {} };"))
             {
                 controls.mainThrottle = 0.3f;
                 recreated.Tick(vessel, controls);

@@ -19,7 +19,7 @@ internal sealed class WorkerRuntime : IDisposable
         {
             // Load V8 and exercise our bindings/module bootstrap before the user
             // clicks Assign. Keep the isolate alive after discarding this context.
-            using var warmup = CreateWorker("export default { flightTick() {} };");
+            using var warmup = CreateWorker("export default class { flightTick() {} };");
         }
         catch { runtime.Dispose(); throw; }
     }

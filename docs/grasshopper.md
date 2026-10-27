@@ -1,6 +1,6 @@
 # Grasshopper hop test
 
-[`grasshopper.js`](../GameData/Klanker/Workers/grasshopper.js) is an experimental
+[`grasshopper.ts`](../workers/samples/grasshopper.ts) is an experimental
 autonomous hopper for a small upright rocket. It climbs about 30 m above its
 starting ground clearance, translates 20 m east, brakes, then descends at 1 m/s,
 slowing toward 0.3 m/s near the ground. Braking and descent target **zero horizontal
@@ -37,7 +37,9 @@ avoidance, or long-range navigation.
 1. Close KSP and build/deploy the updated mod with
    `pnpm make deploy --configuration Release`. The older mod lacks the attitude
    and timing properties this script needs.
-2. Edit the settings at the top of `GameData/Klanker/Workers/grasshopper.js`.
+2. Edit the settings at the top of `workers/samples/grasshopper.ts` and rebuild
+   (`pnpm make build`), or edit the generated
+   `GameData/Klanker/Workers/grasshopper.js` in place.
    Set `hoverThrottle` to approximately **1 / launch TWR**, with the current
    engine thrust limiter and local atmospheric thrust taken into account.
    For TWR 2, use 0.5. This estimate is for the mass at worker startup; the
@@ -107,4 +109,4 @@ The adapter uses the command reference transform and root rigidbody angular
 velocity, consistent with the approach in
 [kRPC's vessel helpers](https://github.com/krpc/krpc/blob/main/service/SpaceCenter/src/ExtensionMethods/VesselExtensions.cs).
 This is not a dependency on kRPC. See
-[`klanker.d.ts`](../GameData/Klanker/Workers/klanker.d.ts) for the complete interface.
+[`klanker.d.ts`](../lib/klanker.d.ts) for the complete interface.

@@ -59,6 +59,7 @@ export const angle = (a: Vec3, b: Vec3): number => {
 };
 /** Rotate `a` around `axis` by `radians` (Rodrigues' rotation formula). */
 export const rotateAround = (a: Vec3, axis: Vec3, radians: number): Vec3 => {
+    if (lengthSquared(axis) === 0) return { x: a.x, y: a.y, z: a.z };
     const k = normalize(axis);
     const c = Math.cos(radians);
     const s = Math.sin(radians);

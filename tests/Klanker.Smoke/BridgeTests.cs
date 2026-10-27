@@ -20,7 +20,7 @@ internal static class BridgeTests
         var vessel = new Vessel();
         var pod = new KlankerComputer();
         pod.part.vessel = vessel;
-        pod.AssignScript("bridge.js", "export default { flightTick() {} };");
+        pod.AssignScript("bridge.js", "export default class { flightTick() {} };");
         pod.OnStart(PartModule.StartState.Flying);
         pod.Computer.Program.SetAlias("guidance");
         pod.Computer.SetAuthority(true);
@@ -79,7 +79,7 @@ internal static class BridgeTests
         {
             [ "target" ] = new JObject { ["alias"] = "guidance" },
             ["file"] = "new.js",
-            ["source"] = "export default { flightTick() {} };",
+            ["source"] = "export default class { flightTick() {} };",
             ["run"] = true,
         });
         Check((string?)deployed["file"] == "new.js" && (bool?)deployed["runRequested"] == true, "bridge deploys and runs");

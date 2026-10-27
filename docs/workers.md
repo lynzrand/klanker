@@ -1,21 +1,22 @@
 # Writing workers
 
-A worker is a JavaScript module with a default export containing a synchronous
-`flightTick` function:
+A worker is a JavaScript module exporting a zero-argument class whose instance
+implements a synchronous `flightTick` method:
 
 ```js
-export default {
+export default class {
     flightTick({ vessel }) {
         vessel.control.throttle = vessel.orbit.apoapsis < 100_000 ? 1 : 0;
-    },
-};
+    }
+}
 ```
 
 Deploy it with `pnpm klanker deploy <file> --to <alias>` (see the
 [CLI](cli.md)); the CLI bundles imports into one self-contained module and
 includes the built-in [worker libraries](libraries.md). Files assigned from the
-in-game window are embedded as-is and must be self-contained.
-`GameData/Klanker/Workers` holds the examples and the shipped `klanker.d.ts`.
+in-game window are embedded as-is and must be self-contained. Worker sources
+live in [`workers/`](../workers); the build bundles the examples into
+`GameData/Klanker/Workers` for the in-game window.
 
 Klanker calls this handler through KSP's flight-control callback on the active,
 unpacked vessel. It does not invoke the worker while the pause menu is open.
@@ -27,19 +28,23 @@ reference part without a computer grants no worker flight authority. See the
 ## Available properties
 
 The full interface, including units and edge cases, is in
-[`klanker.d.ts`](../GameData/Klanker/Workers/klanker.d.ts). It ships beside the
-example workers. Add these lines to a script for editor completion and checking:
+[`klanker.d.ts`](../lib/klanker.d.ts), which ships with the `klanker` standard
+library package and is generated beside the in-game examples. TypeScript
+workers get it directly: `import { PID } from 'klanker'` plus the global
+`Klanker.Worker` type. For a plain JavaScript file in
+`GameData/Klanker/Workers`, add these lines for editor completion and checking:
 
 ~~~js
 // @ts-check
 /// <reference path="./klanker.d.ts" />
 
-/** @satisfies {Klanker.Worker} */
-export default {
+/** @implements {Klanker.Worker} */
+export default class {
+    /** @param {Klanker.FlightContext} context */
     flightTick({ vessel }) {
         vessel.control.throttle = vessel.orbit.apoapsis < 100_000 ? 1 : 0;
-    },
-};
+    }
+}
 ~~~
 
 Telemetry includes vessel identity and situation, mass in kilograms, location,
@@ -47,6 +52,18 @@ surface/orbital speeds, orbit elements, body properties, velocity components,
 and resource totals. Writable state is `vessel.control.throttle` (0..1),
 `pitch`/`yaw`/`roll` (-1..1), the RCS `translation` axes (-1..1), and the
 `sas`/`rcs`/`gear`/`brakes`/`lights`/`abort` action groups.
+
+For ascent and other aerodynamic guidance, the vessel also exposes
+`staticPressure` and `dynamicPressure` (kPa), `atmosphericDensity`, `mach`, and
+`geeForce`; `body.hasAtmosphere` and `body.atmosphereDepth` mark atmospheric
+flight; `currentStage` is KSP's staging-list index (it reaches 0 at the final
+stage); and `currentThrust`/`availableThrust` sum thrust over the vessel in kN.
+`currentThrust` is what the engines make now; `availableThrust` is the vacuum
+potential of the lit, operational engines at full throttle, including limiters.
+Velocity is available in the control frame both surface-relative
+(`velocity.localSurface`) and inertial (`velocity.localOrbital`); use the latter
+for exoatmospheric prograde burns, since KSP's world axes are not
+east/north/up.
 
 These are C# views exposed through ClearScript, not raw KSP objects or plain
 JavaScript records. Read properties directly; copy the fields you want into an
@@ -80,10 +97,19 @@ References are live for the current tick only: store `part.id` in `ctx.storage`
 and re-query with `parts.byId` to follow a part across ticks, staging, or
 docking.
 
-A part exposes `id`, `name`, `title`, `stage`, `tags`, `resources.get(name)`
+A part exposes `id`, `name`, `title`, `stage`, `tags`, `crossfeed` (whether fuel
+may flow through it), `decoupler` (true for a decoupler, anchored decoupler, or
+procedural fairing — a part that separates when staged), `resources.get(name)`
 (single-part totals), and `engines` (`count`/`get(i)`). Each engine exposes
 `name`, `maxThrust`, `thrust`, `ignited`, `operational`, a buffered
-`thrustLimiter` (0..1), and queued `activate()`/`shutdown()` actions.
+`thrustLimiter` (0..1), and queued `activate()`/`shutdown()` actions. For
+staging decisions it also exposes `flameout` (lit but starved of propellant),
+`vacuumThrust`, `isp`, `currentThrottle`, and `propellantAvailable`/
+`propellantCapacity`. The propellant figures are crossfeed-aware: they are how
+much the engine can actually reach through fuel lines and crossfeed, so an
+engine drawing from an empty booster stage reads zero even while the core tanks
+are full. That is what makes autostaging on a stock Kerbal X work without
+modelling crossfeed by hand.
 
 ## MechJeb (experimental)
 
@@ -92,14 +118,14 @@ the vessel. Check `mechjeb.available` first; every other member throws when
 MechJeb is absent.
 
 ~~~js
-export default {
+export default class {
     flightTick({ mechjeb }) {
         if (!mechjeb.available) return;
         mechjeb.attitude.enabled = true;
         mechjeb.attitude.reference = 'ORBIT';
         mechjeb.node.execute();
-    },
-};
+    }
+}
 ~~~
 
 Available operations: `attitude.enabled`, `attitude.reference` (a MechJeb
@@ -133,14 +159,36 @@ are not exposed.
 
 ## Persistent storage
 
+Workers must export a zero-argument constructor. Object exports are rejected
+starting in 0.2.0; replace saved scripts with rebuilt class-based workers. The host
+constructs one instance per runtime and calls optional `onLoad` and `onSave`
+methods with a frozen `{ storage }` context. Use instance fields for typed state
+between ticks; restore them once in `onLoad`, and copy durable values to storage
+in `onSave`. See `workers/samples/storage.ts` for a complete class example.
+
+`onLoad` runs after construction and before any ticks, including when validating
+a deployment. A standby deployment can be validated and disposed, then loaded
+again when it becomes active. Initialization must therefore tolerate repeated
+runtime creation. `onSave` runs at checkpoints (including state inspection,
+KSP saves, replacement and normal teardown), not each tick. Its return value is
+ignored. Both hooks must be synchronous and have no live vessel or timing access.
+Construction and loading share the initialization watchdog; saving shares the
+250 ms serialization budget. Failed saves preserve the last valid checkpoint.
+Fault teardown skips saving, so fields changed since that checkpoint are lost.
+
+The host already parses saved JSON once per runtime, not per physics frame.
+Lifecycle hooks also let scripts avoid decoding and validating their own typed
+state every tick. Class instances, controllers and other runtime objects should
+remain in fields; only ordinary JSON values belong in storage.
+
 Each command part has its own mutable `ctx.storage` object:
 
 ~~~js
-export default {
+export default class {
     flightTick({ storage, vessel }) {
         storage.highestAltitude = Math.max(storage.highestAltitude ?? 0, vessel.altitude);
-    },
-};
+    }
+}
 ~~~
 
 Klanker serializes it as JSON when KSP calls the part's save hook. The JSON is
@@ -231,6 +279,11 @@ setting; KSP, the player, and SAS continue to handle control.
 ## Examples and fault tests
 
 - `observe.js` checks that altitude is finite without writing controls.
+- `ascent.ts` is a full launch-to-orbit autopilot for a stock multi-stage liquid
+  rocket such as the Kerbal X: it releases the clamps, flies a bounded-angle-of-
+  attack gravity turn, throttles for Max-Q and acceleration limits, autostages on
+  engine flameout, and circularises at apoapsis. It imports `klanker:orbit` and
+  `klanker:attitude`, and keeps its phase machine in `ctx.storage`.
 - `grasshopper.js` performs an experimental climb, sideways translation, and
   slow descent. Read the [setup and tuning guide](grasshopper.md) first.
 - `apoapsis.js` demonstrates the throttle controller above. It is not an ascent
@@ -245,7 +298,10 @@ script** to retry, or assign a replacement.
 After testing the watchdog, assign `observe.js` to check that a fresh worker runs.
 
 The time budget is 20 ms per tick, with 250 ms for the first tick's startup work
-and 2 seconds for module initialization. The addon owns one V8 runtime per
+and 2 seconds for module initialization. A single over-budget tick is tolerated,
+because a wall-clock overrun is often a GC or OS stall rather than worker code;
+two consecutive over-budget ticks fault, and a genuinely stuck handler is
+interrupted after 200 ms in steady state. The addon owns one V8 runtime per
 editor/flight scene, warmed during scene startup. Each worker still gets a fresh
 context with separate globals and its own restored storage. Contexts share a
 64 MiB runtime heap limit (not 64 MiB each) and execute serially. These limits

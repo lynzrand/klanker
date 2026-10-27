@@ -70,10 +70,22 @@ public class ModuleEngines : PartModule
 {
     public string engineName = "Engine";
     public float maxThrust = 200, minThrust, finalThrust, resultingThrust, thrustPercentage = 100;
-    public bool getIgnitionState, isOperational = true;
+    public float realIsp = 300, currentThrottle;
+    public bool getIgnitionState, isOperational = true, flameout;
+    public List<Propellant> propellants = new();
     public void Activate() => getIgnitionState = true;
     public void Shutdown() => getIgnitionState = false;
+    public float MaxThrustOutputVac(bool useThrustLimiter) =>
+        maxThrust * (useThrustLimiter ? thrustPercentage / 100f : 1f);
 }
+public sealed class Propellant
+{
+    public string name = "LiquidFuel";
+    public double totalResourceAvailable, totalResourceCapacity;
+    public void UpdateConnectedResources(Part part) { }
+}
+public sealed class ModuleDecouple : PartModule { }
+public sealed class ModuleAnchoredDecoupler : PartModule { }
 public sealed class ModuleNameTag : PartModule { public string nameTag = ""; }
 public sealed class ConfigNode
 {
@@ -94,6 +106,7 @@ public sealed class Part
     public List<PartModule> Modules = new();
     public uint persistentId;
     public int inverseStage;
+    public bool fuelCrossFeed;
     public Vessel? vessel;
     public AvailablePart partInfo = new();
     public KlankerComputer? Computer;
@@ -106,7 +119,13 @@ public struct Vector3d
     public double magnitude => Math.Sqrt(x * x + y * y + z * z);
     public static explicit operator UnityEngine.Vector3(Vector3d v) => new((float)v.x, (float)v.y, (float)v.z);
 }
-public sealed class CelestialBody { public string bodyName = "Kerbin"; public double Radius, gravParameter; }
+public sealed class CelestialBody
+{
+    public string bodyName = "Kerbin";
+    public double Radius, gravParameter;
+    public bool atmosphere;
+    public double atmosphereDepth;
+}
 public sealed class Orbit
 {
     public double ApA, PeA, timeToAp, timeToPe, eccentricity, inclination, semiMajorAxis, period;
@@ -129,6 +148,8 @@ public sealed class Vessel
     public bool loaded = true, packed;
     public Part? ReferencePart;
     public double altitude = 100, verticalSpeed, srfSpeed;
+    public double staticPressurekPa, dynamicPressurekPa, atmDensity, mach, geeForce;
+    public int currentStage;
     public Orbit orbit = new();
     public ActionGroupList ActionGroups = new();
     public event Action<FlightCtrlState>? OnFlyByWire;

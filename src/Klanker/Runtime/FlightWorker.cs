@@ -17,6 +17,7 @@ internal sealed class FlightWorker : IDisposable
     private int logCount;
     private bool truncationReported;
     private bool firstTick = true;
+    private int consecutiveOverruns;
     private readonly object interruptGate = new();
     private long invocation;
     private readonly Action<FlightWorker>? onDisposed;
@@ -34,6 +35,15 @@ internal sealed class FlightWorker : IDisposable
         {
             engine.DefaultAccess = ScriptAccess.None;
             engine.AllowReflection = false;
+            // Use reflection-based host binding instead of the DLR. ClearScript's
+            // dynamic path loads Microsoft.CSharp.dll, and the Mono build KSP
+            // 1.12 runs ships a Microsoft.CSharp that calls
+            // String.Split(char, StringSplitOptions), an overload Unity 2019.4's
+            // mscorlib lacks, so any host method call (vessel.stage(),
+            // vessel.parts.get(i)) faults with MissingMethodException. Reflection
+            // binding never engages that assembly. Access is still gated by
+            // DefaultAccess=None: only [ScriptMember] members are reachable.
+            engine.DisableDynamicBinding = true;
             engine.ExposeHostObjectStaticMembers = false;
             engine.DisableExtensionMethods = true;
             if (sharedRuntime == null) engine.MaxRuntimeHeapSize = (UIntPtr)(64UL * 1024 * 1024);
@@ -67,15 +77,31 @@ internal sealed class FlightWorker : IDisposable
                 })();
                 """);
             engine.Execute(new DocumentInfo("klanker-entry") { Category = ModuleCategory.Standard }, """
-                import worker from 'worker';
+                import definition from 'worker';
+                if (typeof definition !== 'function')
+                    throw new TypeError('Worker must export a zero-argument class constructor; object exports were removed in 0.2.0');
+                const worker = new definition();
                 if (!worker || typeof worker.flightTick !== 'function')
-                    throw new TypeError('Worker must export default { flightTick(ctx) { ... } }');
+                    throw new TypeError('Worker constructor must produce an instance with flightTick(ctx)');
+                for (const name of ['onLoad', 'onSave']) {
+                    if (worker[name] !== undefined && typeof worker[name] !== 'function')
+                        throw new TypeError(name + ' must be a function');
+                }
                 const ctx = globalThis.__context;
                 delete globalThis.__context;
-                globalThis.__flightTick = () => {
-                    const result = worker.flightTick(ctx);
+                const lifecycle = Object.freeze({ storage: ctx.storage });
+                const synchronous = (result, name) => {
                     if (result && typeof result.then === 'function')
-                        throw new TypeError('flightTick must be synchronous');
+                        throw new TypeError(name + ' must be synchronous');
+                };
+                if (worker.onLoad) synchronous(worker.onLoad(lifecycle), 'onLoad');
+                const snapshot = globalThis.__snapshotStorage;
+                globalThis.__snapshotStorage = () => {
+                    if (worker.onSave) synchronous(worker.onSave(lifecycle), 'onSave');
+                    return snapshot();
+                };
+                globalThis.__flightTick = () => {
+                    synchronous(worker.flightTick(ctx), 'flightTick');
                 };
                 """);
         }
@@ -170,16 +196,32 @@ internal sealed class FlightWorker : IDisposable
     {
         context.Begin(vessel, controls);
         // Allow CLR/JIT and host binding setup once, while still bounding startup.
-        var budgetMilliseconds = firstTick ? 250 : 20;
+        var first = firstTick;
+        var budgetMilliseconds = first ? 250 : 20;
+        // The interrupt is a runaway backstop, not the soft budget: it fires well
+        // after the budget so a GC or OS stall cannot be mistaken for a stuck
+        // handler. A real hang is still stopped in a fraction of a second.
+        var interruptAfter = first ? 250 : 200;
         firstTick = false;
         var started = Stopwatch.GetTimestamp();
         try
         {
-            using var watchdog = StartWatchdog(budgetMilliseconds);
+            using var watchdog = StartWatchdog(interruptAfter);
             engine.Invoke("__flightTick");
-            // Also reject an over-budget invocation that finished between watchdog polls.
             if ((Stopwatch.GetTimestamp() - started) * 1000d / Stopwatch.Frequency > budgetMilliseconds)
-                throw new TimeoutException($"flightTick exceeded its {budgetMilliseconds} ms budget.");
+            {
+                // A single over-budget tick is usually a GC or OS stall, not
+                // worker code. Tolerate an isolated one; two in a row mean the
+                // handler itself is too heavy, and a real hang is already
+                // stopped by the interrupt above.
+                if (++consecutiveOverruns >= 2)
+                    throw new TimeoutException(
+                        $"flightTick exceeded its {budgetMilliseconds} ms budget on consecutive ticks.");
+            }
+            else
+            {
+                consecutiveOverruns = 0;
+            }
             context.Commit();
         }
         finally

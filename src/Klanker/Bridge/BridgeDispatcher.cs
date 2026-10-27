@@ -77,9 +77,18 @@ internal static class BridgeDispatcher
     private static KlankerComputer Resolve(JObject parameters)
     {
         var target = parameters["target"] as JObject
-            ?? throw new InvalidOperationException("A target with an id or alias is required.");
+            ?? throw new InvalidOperationException("A target with an id, alias, or active flag is required.");
         var id = (string?)target["id"];
         var alias = (string?)target["alias"];
+        if ((bool?)target["active"] == true)
+        {
+            if (!string.IsNullOrEmpty(id) || !string.IsNullOrEmpty(alias))
+                throw new InvalidOperationException("Target must not combine active with id or alias.");
+            var vessel = HighLogic.LoadedSceneIsFlight ? FlightGlobals.ActiveVessel : null;
+            return FlightAddon.FindActiveComputer(vessel)
+                ?? throw new InvalidOperationException(
+                    "No active computer: the active vessel's control-point part needs an enabled Klanker computer.");
+        }
         if (string.IsNullOrEmpty(id) == string.IsNullOrEmpty(alias))
             throw new InvalidOperationException("Target must have exactly one of id or alias.");
         KlankerComputer? match = null;

@@ -18,7 +18,7 @@ export interface AttitudeOptions {
 
 export interface AttitudeContext {
     vessel: {
-        attitude: { angularVelocity: Vec3 };
+        attitude: { angularVelocity: Vec3; up: Vec3 };
         control: { pitch: number; yaw: number; roll: number };
     };
 }
@@ -53,14 +53,17 @@ export class AttitudeHold {
         return d;
     }
 
-    /** Re-aim at the last target, or local up if no target was set. */
+    /**
+     * Re-apply the last control-local direction, or straight ahead if none was
+     * set. Recompute world-fixed targets each tick as the control frame rotates.
+     */
     hold(context: AttitudeContext): Vec3 {
         return this.aim(context, this.target ?? { x: 0, y: 1, z: 0 });
     }
 
     /** Keep the nose radial-out (local up). */
     holdUp(context: AttitudeContext): Vec3 {
-        return this.aim(context, { x: 0, y: 1, z: 0 });
+        return this.aim(context, context.vessel.attitude.up);
     }
 
     /** Damp rotation only, without a target. */

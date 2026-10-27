@@ -112,13 +112,13 @@ internal static class ViewTests
 
         // Discrete staging is queued and runs only after a successful tick.
         var stageManager = KSP.UI.Screens.StageManager.Instance;
-        using (var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.stage(); } };"))
+        using (var worker = new FlightWorker("export default class { flightTick({vessel}) { vessel.stage(); } };"))
         {
             stageManager.Activations = 0;
             worker.Tick(vessel, controls);
             Check(stageManager.Activations == 1, "staging action commits after a successful tick");
         }
-        using (var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.stage(); throw new Error('rollback'); } };"))
+        using (var worker = new FlightWorker("export default class { flightTick({vessel}) { vessel.stage(); throw new Error('rollback'); } };"))
         {
             stageManager.Activations = 0;
             Reject(() => worker.Tick(vessel, controls), "staging tick fault");
@@ -159,10 +159,53 @@ internal static class ViewTests
         Reject(() => context.Vessel.Parts.ById("999"), "unknown part id");
         context.End();
 
+        // Ascent telemetry: atmosphere, acceleration, thrust aggregation, and the
+        // staging signals an autopilot reads (flameout, per-engine propellant).
+        vessel.mainBody.atmosphere = true;
+        vessel.mainBody.atmosphereDepth = 70000;
+        vessel.staticPressurekPa = 30.5; vessel.dynamicPressurekPa = 18.25;
+        vessel.atmDensity = 0.9; vessel.mach = 1.2; vessel.geeForce = 2.5;
+        vessel.currentStage = 3;
+        tank.fuelCrossFeed = true;
+        second.Modules.Add(new ModuleDecouple());
+        engine.flameout = true; engine.realIsp = 345; engine.currentThrottle = 0.5f;
+        engine.getIgnitionState = true; engine.isOperational = true; engine.thrustPercentage = 100;
+        engine.finalThrust = 12;
+        engine.propellants.Add(new Propellant { totalResourceAvailable = 40, totalResourceCapacity = 100 });
+        context.Begin(vessel, controls);
+        var view = context.Vessel;
+        Check(view.StaticPressure == 30.5 && view.DynamicPressure == 18.25 && view.AtmosphericDensity == 0.9 &&
+            view.Mach == 1.2 && view.GeeForce == 2.5 && view.CurrentStage == 3, "atmosphere/acceleration telemetry");
+        Check(view.Body.HasAtmosphere && view.Body.AtmosphereDepth == 70000, "body atmosphere");
+        Check(view.Velocity.LocalOrbital.X == 3 && view.Velocity.LocalOrbital.Y == 4, "local orbital velocity");
+        Check(view.CurrentThrust == 12 && view.AvailableThrust == 60, "thrust aggregates");
+        Check(view.EngineCount == 1 && view.FlameoutEngines == 1, "engine counts");
+        var live = view.Parts.ById("202").Engines.Get(0);
+        Check(live.Flameout && live.Isp == 345 && live.CurrentThrottle == 0.5 && live.VacuumThrust == 60,
+            "engine burn telemetry");
+        Check(live.PropellantAvailable == 40 && live.PropellantCapacity == 100, "crossfeed propellant");
+        Check(view.Parts.ById("101").Crossfeed && !view.Parts.ById("101").Decoupler &&
+            view.Parts.ById("202").Decoupler, "crossfeed and decoupler flags");
+        context.End();
+        using (var worker = new FlightWorker("""
+            export default class { flightTick({vessel}) {
+                const assert = (ok, message) => { if (!ok) throw new Error(message); };
+                assert(vessel.dynamicPressure === 18.25 && vessel.body.hasAtmosphere, 'atmosphere');
+                assert(vessel.currentStage === 3 && vessel.availableThrust === 60, 'thrust and staging');
+                const engine = vessel.parts.byId('202').engines.get(0);
+                assert(engine.flameout === true && engine.propellantAvailable === 40, 'engine staging signals');
+                assert(vessel.parts.byId('202').decoupler === true, 'decoupler flag');
+            }};
+            """))
+        {
+            worker.Tick(vessel, controls);
+        }
+        Check(true, "JS ascent telemetry marshals");
+
         // Exercise the parts API through real V8 to confirm arrays and nested
         // views marshal correctly.
         using (var worker = new FlightWorker("""
-            export default { flightTick({vessel}) {
+            export default class { flightTick({vessel}) {
                 const assert = (ok, message) => { if (!ok) throw new Error(message); };
                 assert(vessel.parts.count === 2 && vessel.parts.get(0).id === '101', 'parts count/get');
                 assert(vessel.parts.byName('fuelTank').count === 2, 'parts.byName');
@@ -190,7 +233,7 @@ internal static class ViewTests
         Reject(() => context.MechJeb.Landing.Start(), "MechJeb landing requires the mod");
         context.End();
         using (var worker = new FlightWorker("""
-            export default { flightTick({mechjeb}) {
+            export default class { flightTick({mechjeb}) {
                 if (mechjeb.available !== false) throw new Error('expected MechJeb absent');
                 try { mechjeb.node.execute(); throw new Error('expected throw'); }
                 catch (error) { if (String(error).includes('expected throw')) throw error; }
@@ -205,7 +248,7 @@ internal static class ViewTests
         using (var worker = new FlightWorker("""
             console.log('loaded', {ok: true}, 7);
             let oldOrbit;
-            export default { flightTick({vessel}) {
+            export default class { flightTick({vessel}) {
                 const assert = (ok, message) => { if (!ok) throw new Error(message); };
                 assert(typeof vessel.id === 'string' && vessel.name === 'Test vessel', 'identity');
                 assert(vessel.situation === 'FLYING' && vessel.mass === 2000, 'status/mass');
@@ -244,7 +287,7 @@ internal static class ViewTests
         }
         foreach (var value in new[] { "'0.5'", "null", "undefined", "true", "NaN", "Infinity", "2" })
         {
-            using var worker = new FlightWorker("export default { flightTick({vessel}) { vessel.control.throttle = 1; vessel.control.pitch = " + value + "; } };");
+            using var worker = new FlightWorker("export default class { flightTick({vessel}) { vessel.control.throttle = 1; vessel.control.pitch = " + value + "; } };");
             controls.mainThrottle = 0.3f;
             Reject(() => worker.Tick(vessel, controls), "invalid control " + value);
             Check(controls.mainThrottle == 0.3f, "invalid setter rolls back all buffers");
@@ -252,7 +295,7 @@ internal static class ViewTests
         logs.Clear();
         using (var worker = new FlightWorker("""
             for (let i = 0; i < 100; i++) console.log('x'.repeat(3000));
-            export default { flightTick() {} };
+            export default class { flightTick() {} };
             """, logs.Add))
         {
             Check(logs.FindAll(line => line.Length == 2048).Count == 20, "bounded console output");
@@ -263,7 +306,7 @@ internal static class ViewTests
         // limit, repeated overflow, and next-window reset retain their behavior.
         logs.Clear();
         using (var worker = new FlightWorker("""
-            export default { flightTick() { for (let i = 0; i < 20; i++) console.log('bounded'); } };
+            export default class { flightTick() { for (let i = 0; i < 20; i++) console.log('bounded'); } };
             """, logs.Add))
         {
             worker.Tick(vessel, controls);
